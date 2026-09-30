@@ -73,6 +73,7 @@ docs/                  setup, deployment and design decisions
 
 ## Documentation
 
+* [docs/CONNECT-REAL-AD-AND-OKTA.md](docs/CONNECT-REAL-AD-AND-OKTA.md) - try a real test AD and Okta from your own machine, step by step
 * [docs/OKTA-SETUP.md](docs/OKTA-SETUP.md) - the Okta app, redirect URIs and the groups claim
 * [docs/AD-DELEGATION.md](docs/AD-DELEGATION.md) - the gMSA and the exact rights to delegate on the manageable OUs
 * [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - IIS, HTTPS, SQLite location, backup and restore, upgrades
