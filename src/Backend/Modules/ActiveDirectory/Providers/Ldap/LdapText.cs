@@ -26,6 +26,20 @@ public static partial class LdapText
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The binary SID of a domain object: the domain SID with one more sub-authority (the RID) appended.
+    /// Done by hand because System.Security.Principal.SecurityIdentifier only works on Windows.
+    /// </summary>
+    public static byte[] AppendRid(byte[] domainSid, int rid)
+    {
+        if (domainSid.Length < 8 || domainSid[1] >= 15) throw new ArgumentException("Not a domain SID.", nameof(domainSid));
+        var result = new byte[domainSid.Length + 4];
+        Array.Copy(domainSid, result, domainSid.Length);
+        result[1]++; // one more sub-authority
+        BitConverter.GetBytes(rid).CopyTo(result, domainSid.Length); // little-endian on every supported platform
+        return result;
+    }
+
     /// <summary>Binary GUID as an LDAP filter value: \xx per byte.</summary>
     public static string EscapeGuid(Guid id) => EscapeBytes(id.ToByteArray());
 

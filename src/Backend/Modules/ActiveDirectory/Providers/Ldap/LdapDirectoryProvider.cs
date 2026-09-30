@@ -2,7 +2,6 @@ using System.DirectoryServices.Protocols;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security;
-using System.Security.Principal;
 using System.Text;
 using Microsoft.Extensions.Options;
 using ServiceDashboard.Configuration;
@@ -35,7 +34,8 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
         c.SessionOptions.SecureSocketLayer = _o.UseLdaps;
         c.SessionOptions.ReferralChasing = ReferralChasingOptions.None;
         // Certificate checks stay on. The switch exists only for local troubleshooting and the app refuses to start with it off in Production.
-        if (!_o.VerifyCertificate) c.SessionOptions.VerifyServerCertificate = (_, _) => true;
+        // (On Linux libldap does not support the callback; there, set LDAPTLS_REQCERT=never for a lab, or trust the CA.)
+        if (!_o.VerifyCertificate && OperatingSystem.IsWindows()) c.SessionOptions.VerifyServerCertificate = (_, _) => true;
         if (!string.IsNullOrEmpty(_o.BindUsername))
         {
             // Local testing only (the startup checks refuse this outside Development). Basic is only used over LDAPS.
@@ -373,9 +373,7 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
         if (rid <= 0) return null;
         var root = ReadOne(c, BaseDn, "(objectClass=domain)", ["objectSid"], SearchScope.Base);
         if (root == null || !root.Attributes.Contains("objectSid") || root.Attributes["objectSid"][0] is not byte[] sidBytes) return null;
-        var groupSid = new SecurityIdentifier($"{new SecurityIdentifier(sidBytes, 0)}-{rid}");
-        var bytes = new byte[groupSid.BinaryLength];
-        groupSid.GetBinaryForm(bytes, 0);
+        var bytes = LdapText.AppendRid(sidBytes, rid);
         var e = ReadOne(c, BaseDn, $"(&{LdapFilters.GroupBase}(objectSid={LdapText.EscapeBytes(bytes)}))", GroupAttrs);
         return e == null ? null : MapGroup(e);
     }
