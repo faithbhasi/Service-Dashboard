@@ -105,7 +105,7 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
         return [.. list];
     }
 
-    private static readonly string[] GroupAttrs = ["objectGUID", "cn", "description", "groupType", "managedBy", "adminCount", "distinguishedName"];
+    private static readonly string[] GroupAttrs = ["objectGUID", "cn", "description", "groupType", "managedBy", "adminCount", "distinguishedName", "objectClass"];
 
     private DirectoryUser MapUser(LdapConnection c, SearchResultEntry e, DirectoryReadOptions o, bool resolveManager)
     {
@@ -336,6 +336,9 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
         var (_, total, _) = SearchPage(c, BaseDn, LdapFilters.Members(e.DistinguishedName, null, null), ["cn"], 1, 1, int.MaxValue);
         return WithManager(c, MapGroup(e, total), e);
     }, ct);
+
+    public Task<DirectoryGroup?> GetGroupByDnAsync(string dn, CancellationToken ct = default) => Run(c =>
+        ReadByDn(c, dn, GroupAttrs) is { } e && Values(e, "objectClass").Contains("group", StringComparer.OrdinalIgnoreCase) ? MapGroup(e) : null, ct);
 
     public Task<Memberships?> GetMembershipsAsync(Guid objectId, DirectoryObjectKind kind, CancellationToken ct = default) => Run(c =>
     {

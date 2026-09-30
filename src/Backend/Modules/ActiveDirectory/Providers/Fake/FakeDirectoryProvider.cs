@@ -215,6 +215,12 @@ public sealed class FakeDirectoryProvider : IDirectoryProvider
         lock (_lock) return Task.FromResult(_d.Groups.FirstOrDefault(g => g.Id == id) is { } g ? ToGroup(g, withCount: true) : null);
     }
 
+    public Task<DirectoryGroup?> GetGroupByDnAsync(string dn, CancellationToken ct = default)
+    {
+        Guard();
+        lock (_lock) return Task.FromResult(_d.Groups.FirstOrDefault(g => DnText.Equal(g.Dn, dn)) is { } g ? ToGroup(g) : null);
+    }
+
     private IEnumerable<FakeGroup> GroupsOf(Guid memberId) =>
         _d.Groups.Where(g => _d.Members.TryGetValue(g.Id, out var m) && m.Contains(memberId));
 

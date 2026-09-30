@@ -23,6 +23,7 @@ public sealed class SettingsController(SettingsService settings, ModuleCatalog m
     public async Task<IActionResult> Shell()
     {
         var general = await settings.GetGeneralAsync();
+        var policies = await settings.GetActionPoliciesAsync();
         return Ok(new
         {
             productName = general.ProductName,
@@ -32,6 +33,7 @@ public sealed class SettingsController(SettingsService settings, ModuleCatalog m
             supportContact = general.SupportContact,
             idleTimeoutMinutes = general.IdleTimeoutMinutes,
             banner = BannerLogic.ActiveBanner(general),
+            actionPolicies = policies,
             modules = await modules.ListAsync(),
         });
     }

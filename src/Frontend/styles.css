@@ -221,3 +221,4 @@ a.stat:hover { border-color: var(--primary); }
   .color-row { grid-template-columns: 1fr 48px 100px; }
   .color-row .muted { grid-column: 1 / -1; }
 }
+.tree.list-check .check { border-bottom: 0; padding: 2px 0; }

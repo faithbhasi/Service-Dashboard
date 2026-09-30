@@ -17,7 +17,7 @@ const PAGE_SIZE = 25;
 
 export function UsersPage() {
   const list = useListParams();
-  const drawer = useDrawerRoute('/ad/users', 'groups');
+  const drawer = useDrawerRoute('/ad/users', '');
   const t = useAdText();
 
   const columns: Column<AdUser>[] = useMemo(() => [

@@ -8,22 +8,25 @@ import { get } from '../../Services/api';
 import type { UserDetail } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { MembershipsPanel } from './MembershipsPanel';
+import { AddToGroupsPanel, EnableDisablePanel, MoveOuPanel, PasswordResetPanel, RemoveFromGroupsBar, UnlockPanel } from './ActionPanels';
 
-export interface DrawerActionProps {
-  detail: UserDetail; onChanged: () => void;
-}
-
-/** Extra tabs (Add to Groups, Password Reset, ...) are registered here in step 5. */
+/** Only the tabs the user's permissions allow are shown. Add to Groups is the default when permitted. */
 export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
   id: string; tab: string; onTab: (t: string) => void; onClose: () => void; onChanged: () => void;
 }) {
-  const { canAny } = useAuth();
+  const { can, canAny } = useAuth();
   const [version, setVersion] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const detail = useAsync(() => get<UserDetail>(`/modules/ad/users/${id}`), [id, version]);
   const refresh = () => { setVersion((v) => v + 1); onChanged(); };
 
   const tabs: TabDef[] = [
+    ...(can(Permissions.AdUsersGroupsAdd) ? [{ id: 'add-groups', label: 'Add to Groups' }] : []),
     { id: 'groups', label: 'Group Memberships' },
+    ...(can(Permissions.AdUsersResetPassword) ? [{ id: 'password', label: 'Password Reset' }] : []),
+    ...(can(Permissions.AdUsersUnlock) ? [{ id: 'unlock', label: 'Unlock Account' }] : []),
+    ...(canAny(Permissions.AdUsersEnable, Permissions.AdUsersDisable) ? [{ id: 'enable', label: 'Enable / Disable' }] : []),
+    ...(can(Permissions.AdUsersMove) ? [{ id: 'move', label: 'Move OU' }] : []),
     { id: 'details', label: 'Account Details' },
     ...(canAny(Permissions.LogsRead, Permissions.LogsReadOwn) ? [{ id: 'activity', label: 'Activity History' }] : []),
   ];
@@ -53,7 +56,18 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
       {u && (
         <>
           <Tabs tabs={tabs} active={active} onChange={onTab} />
-          {active === 'groups' && <MembershipsPanel path={`/modules/ad/users/${id}/groups`} reloadKey={version} />}
+          {active === 'add-groups' && <AddToGroupsPanel user={u} onChanged={refresh} />}
+          {active === 'groups' && (
+            <>
+              <MembershipsPanel path={`/modules/ad/users/${id}/groups`} reloadKey={version} canRemove={can(Permissions.AdUsersGroupsRemove)} selected={selected}
+                onSelect={(gid, on) => { const n = new Set(selected); on ? n.add(gid) : n.delete(gid); setSelected(n); }} />
+              {can(Permissions.AdUsersGroupsRemove) && <RemoveFromGroupsBar user={u} selected={selected} onDone={() => { setSelected(new Set()); refresh(); }} />}
+            </>
+          )}
+          {active === 'password' && <PasswordResetPanel user={u} onChanged={refresh} />}
+          {active === 'unlock' && <UnlockPanel user={u} onChanged={refresh} />}
+          {active === 'enable' && <EnableDisablePanel kind="User" obj={u} onChanged={refresh} />}
+          {active === 'move' && <MoveOuPanel kind="User" obj={u} manageable={detail.data!.ouManageable} reason={detail.data!.ouReason} onChanged={refresh} />}
           {active === 'details' && <UserDetails user={u} />}
           {active === 'activity' && <Note>Activity history is added with the audit log.</Note>}
         </>

@@ -7,7 +7,10 @@ export interface Me {
 }
 export interface ModuleStatus { id: string; name: string; description: string; status: 'Active' | 'Disabled' | 'Coming Soon'; enabled: boolean }
 export interface BannerInfo { type: 'Information' | 'Warning' | 'Maintenance'; text: string; dismissible: boolean }
+export interface ActionPolicy { justificationRequired: boolean; justificationMinLength: number; ticketRequired: boolean; ticketPattern: string | null; typedConfirmationRequired: boolean }
+export interface ActionPolicies { actions: Record<string, ActionPolicy>; mustChangePasswordDefault: boolean; generatedPasswordLength: number }
 export interface Shell {
+  actionPolicies: ActionPolicies;
   productName: string; environmentLabel: string; timeZone: string; dateFormat: string; supportContact: string;
   idleTimeoutMinutes: number; banner: BannerInfo | null; modules: ModuleStatus[];
 }

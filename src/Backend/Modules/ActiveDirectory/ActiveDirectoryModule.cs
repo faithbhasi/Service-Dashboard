@@ -32,6 +32,7 @@ public static class ActiveDirectoryModule
 
         services.AddScoped<AdSettingsService>();
         services.AddScoped<AdDirectoryService>();
+        services.AddScoped<AdChangeService>();
         services.AddScoped<IModuleSearchProvider, AdSearchProvider>();
         services.AddScoped<IDashboardCardProvider, AdDashboardCards>();
         return services;

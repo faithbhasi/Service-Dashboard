@@ -5,11 +5,14 @@ export class ApiError extends Error {
   status: number;
   code?: string;
   correlationId?: string;
-  constructor(status: number, message: string, code?: string, correlationId?: string) {
+  /** The parsed response body, for endpoints (like AD changes) whose error body carries structured details. */
+  data?: unknown;
+  constructor(status: number, message: string, code?: string, correlationId?: string, data?: unknown) {
     super(message);
     this.status = status;
     this.code = code;
     this.correlationId = correlationId;
+    this.data = data;
   }
 }
 
@@ -24,9 +27,11 @@ async function toError(res: Response): Promise<ApiError> {
   let message = `Request failed (${res.status})`;
   let code: string | undefined;
   let correlationId = res.headers.get('X-Correlation-ID') ?? undefined;
+  let data: unknown;
   try {
     const p = await res.json();
-    message = p.detail || p.title || message;
+    data = p;
+    message = p.detail || p.title || p.message || message;
     code = p.code;
     correlationId = p.correlationId ?? correlationId;
     if (p.errors && typeof p.errors === 'object') {
@@ -34,7 +39,7 @@ async function toError(res: Response): Promise<ApiError> {
       if (first) message = first;
     }
   } catch { /* not JSON */ }
-  return new ApiError(res.status, message, code, correlationId);
+  return new ApiError(res.status, message, code, correlationId, data);
 }
 
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {

@@ -8,11 +8,12 @@ import { get } from '../../Services/api';
 import type { ComputerDetail } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { MembershipsPanel } from './MembershipsPanel';
+import { EnableDisablePanel, MoveOuPanel } from './ActionPanels';
 
 export function ComputerDrawer({ id, tab, onTab, onClose, onChanged }: {
   id: string; tab: string; onTab: (t: string) => void; onClose: () => void; onChanged: () => void;
 }) {
-  const { canAny } = useAuth();
+  const { can, canAny } = useAuth();
   const { date, dateTime } = useShell();
   const t = useAdText();
   const [version, setVersion] = useState(0);
@@ -21,6 +22,8 @@ export function ComputerDrawer({ id, tab, onTab, onClose, onChanged }: {
 
   const tabs: TabDef[] = [
     { id: 'details', label: 'Details' },
+    ...(canAny(Permissions.AdComputersEnable, Permissions.AdComputersDisable) ? [{ id: 'enable', label: 'Enable / Disable' }] : []),
+    ...(can(Permissions.AdComputersMove) ? [{ id: 'move', label: 'Move OU' }] : []),
     { id: 'groups', label: 'Group Memberships' },
     ...(canAny(Permissions.LogsRead, Permissions.LogsReadOwn) ? [{ id: 'activity', label: 'Activity History' }] : []),
   ];
@@ -64,6 +67,8 @@ export function ComputerDrawer({ id, tab, onTab, onClose, onChanged }: {
               <Note>Active Directory does not record the last logged-in user. It is only shown when an attribute is configured in Settings that holds it.</Note>
             </Card>
           )}
+          {active === 'enable' && <EnableDisablePanel kind="Computer" obj={c} onChanged={refresh} />}
+          {active === 'move' && <MoveOuPanel kind="Computer" obj={c} manageable={detail.data!.ouManageable} reason={detail.data!.ouReason} onChanged={refresh} />}
           {active === 'groups' && <MembershipsPanel path={`/modules/ad/computers/${id}/groups`} reloadKey={version} />}
           {active === 'activity' && <Note>Activity history is added with the audit log.</Note>}
         </>

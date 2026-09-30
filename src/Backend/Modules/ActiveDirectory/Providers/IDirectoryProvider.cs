@@ -201,6 +201,8 @@ public interface IDirectoryProvider
     Task<DirectoryComputer?> GetComputerAsync(Guid id, DirectoryReadOptions options, CancellationToken ct = default);
     Task<PagedResult<DirectoryGroup>> SearchGroupsAsync(GroupSearch search, CancellationToken ct = default);
     Task<DirectoryGroup?> GetGroupAsync(Guid id, CancellationToken ct = default);
+    /// <summary>Used to resolve the manageable-groups allowlist (which stores DNs) into groups.</summary>
+    Task<DirectoryGroup?> GetGroupByDnAsync(string dn, CancellationToken ct = default);
     /// <summary>Direct, nested and primary group memberships of a user or computer.</summary>
     Task<Memberships?> GetMembershipsAsync(Guid objectId, DirectoryObjectKind kind, CancellationToken ct = default);
     /// <summary>Members of a group, filtered and paged by the directory itself (never loads the whole member list).</summary>
