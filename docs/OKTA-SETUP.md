@@ -1,5 +1,7 @@
 # Okta setup
 
+> Looking for the step-by-step procedure with a sign-off checklist, day-to-day operations and troubleshooting? See [OKTA-RUNBOOK.md](OKTA-RUNBOOK.md).
+
 The application signs users in with **OpenID Connect, Authorization Code flow with PKCE**, using the standard ASP.NET Core
 OpenID Connect handler and a cookie session. The server keeps the session; the browser only holds an HttpOnly, Secure,
 SameSite cookie. No tokens are stored in browser storage.
