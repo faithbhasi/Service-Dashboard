@@ -44,6 +44,13 @@ public sealed class ActiveDirectoryOptions
     public string BaseDn { get; set; } = "";
     /// <summary>Must stay true in Production.</summary>
     public bool VerifyCertificate { get; set; } = true;
+    /// <summary>
+    /// LOCAL TESTING ONLY. Bind with this account instead of the process identity (useful from a machine that is not joined to the domain).
+    /// Put the password in user secrets. The application refuses to start outside Development if either is set: in production the
+    /// IIS app pool's gMSA is used and no AD password is stored anywhere.
+    /// </summary>
+    public string BindUsername { get; set; } = "";
+    public string BindPassword { get; set; } = "";
     /// <summary>Fake provider only: make every call fail as if the domain controller were unreachable.</summary>
     public bool SimulateServerUnavailable { get; set; }
 }

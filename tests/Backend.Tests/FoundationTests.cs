@@ -41,6 +41,15 @@ public class StartupValidationTests
     }
 
     [Fact]
+    public void Local_test_bind_credentials_are_refused_outside_Development()
+    {
+        var values = new Dictionary<string, string?> { ["ActiveDirectory:Provider"] = "Fake", ["ActiveDirectory:BindUsername"] = "svc@example.test" };
+        Assert.Contains(Validate(values, dev: false, prod: false), e => e.Contains("BindUsername"));
+        Assert.Contains(Validate(values, dev: false, prod: true), e => e.Contains("BindUsername"));
+        Assert.DoesNotContain(Validate(values, dev: true, prod: false), e => e.Contains("BindUsername"));
+    }
+
+    [Fact]
     public void Production_refuses_unfilled_placeholders_and_the_fake_provider()
     {
         var errors = Validate(new()

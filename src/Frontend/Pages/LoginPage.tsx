@@ -51,7 +51,10 @@ export function LoginPage() {
         {params.get('signedOut') && <Note kind="success">You have been signed out.</Note>}
         {message && <Note kind="error">{message}</Note>}
         {config && !config.devSignIn && (
-          <a className="btn btn-primary btn-block" href="/api/auth/login">Sign in with Okta</a>
+          <>
+            <p className="muted">You will be taken to Okta to sign in with your username and password, or single sign-on and MFA if your organisation uses them.</p>
+            <a className="btn btn-primary btn-block" href="/api/auth/login">Sign in with Okta</a>
+          </>
         )}
         {config?.devSignIn && (
           <>

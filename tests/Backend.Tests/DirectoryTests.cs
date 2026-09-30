@@ -117,6 +117,19 @@ public class LdapTextTests
     public void Distinguished_names_are_validated(string dn, bool valid) => Assert.Equal(valid, DnText.IsValidDn(dn));
 
     [Fact]
+    public void A_group_SID_is_the_domain_SID_with_the_RID_appended()
+    {
+        // S-1-5-21-1-2-3 as bytes: revision 1, 4 sub-authorities, authority 5, then 21,1,2,3
+        byte[] domain = [1, 4, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0];
+        var group = LdapText.AppendRid(domain, 513);
+        Assert.Equal(5, group[1]);
+        Assert.Equal(domain.Length + 4, group.Length);
+        Assert.Equal(new byte[] { 0x01, 0x02, 0x00, 0x00 }, group[^4..]); // 513 = 0x201, little-endian
+        Assert.Equal("\\01\\05\\00", LdapText.EscapeBytes(group[..3]));
+        Assert.Throws<ArgumentException>(() => LdapText.AppendRid([1, 2], 513));
+    }
+
+    [Fact]
     public void Dn_comparison_ignores_case_and_spacing_and_understands_ancestry()
     {
         Assert.True(DnText.Equal("ou=Staff, ou=Corp,dc=X", "OU=Staff,OU=Corp,DC=x"));
