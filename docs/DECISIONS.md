@@ -77,9 +77,10 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 * A role cannot be deleted while assigned or mapped. Default roles cannot be deleted; only Admins is locked against editing.
 * Access-management denials are audited too.
 * **What a role may manage in Active Directory** (Users and Groups > Roles > edit a role > "What this role can manage in Active Directory"):
-  a role can be limited to some of the manageable **user OUs**, **computer OUs** and **groups** by ticking boxes. The lists to choose from are the
-  manageable OUs and groups in Settings > AD Integration, which stay the ceiling (protected objects and the allowlists always apply too), so a role
-  can only narrow what is allowed there. "No limit" (the default, and how every existing role behaves) adds nothing; an empty list means nothing.
+  a role can be limited to some of the manageable **user OUs**, **computer OUs** and **groups** by ticking boxes. For OUs the **whole OU tree** is
+  shown and every OU can be ticked, at any depth (a ticked OU covers everything below it); an OU that is outside the manageable OUs in
+  Settings > AD Integration is visible but greyed out with the reason, and an OU has to exist to be chosen. Groups are chosen from the manageable
+  groups list. Settings > AD Integration stays the ceiling (protected objects and the allowlists always apply too), so a role can only narrow what is allowed there. "No limit" (the default, and how every existing role behaves) adds nothing; an empty list means nothing.
   * Enforcement is on the server in the same change pipeline as everything else (a role-scope denial is audited as Denied with the reason), and
     the screens follow it: the Move/Add controls, `ouManageable` and a group's `isManageable` already reflect the signed-in person's roles.
   * A person with several roles can manage what **any** of the roles that can change that kind of object allows. A read-only role (for example
@@ -104,6 +105,12 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 * **Hourly chart on Home**: password resets and unlocks are counted from this application's audit log; lockouts come from the `lockoutTime`
   Active Directory keeps on each account (read through LDAP, capped at 5000). AD does not keep a history of lockouts, so an account that
   was locked and already unlocked may not be counted, and the chart can never show lockouts from before the account's last lockout.
+* **Environment label colour** (Settings > General): the badge next to the product name can use any `#rrggbb` colour (the text colour is chosen for
+  contrast); left empty it is automatic (red for Production, blue for Test, amber otherwise). A client that does not send the field keeps the
+  current colour.
+* **Home**: a running HH:MM:SS clock under the Refresh button, in the time zone set in Settings > General (UTC if that name is not recognised).
+  The logo and product name in the top bar link to Home. Activity History in the pop-ups shows 20 rows per page.
+* **Esc** closes one layer at a time: a confirmation dialog open on top of a pop-up takes the key first.
 * **Lists** (Users, Computers, Groups, group members, App Users, Activity and Logs) have a Rows per page choice of 25, 50 or 100 at the bottom
   right; on the AD lists it is kept in the address (`pageSize`).
 * **User and computer filters**: department and job title are "contains" filters on the `department` and `title` attributes; the operating

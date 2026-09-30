@@ -1,3 +1,4 @@
+import { OuCheckTree } from './OuCheckTree';
 import { Note } from './ui';
 
 export interface AdScope { userOus: string[] | null; computerOus: string[] | null; groups: string[] | null }
@@ -28,7 +29,7 @@ export function RoleScopeEditor({ value, onChange, options, readOnly }: {
       <legend>What this role can manage in Active Directory</legend>
       <p className="muted small">
         Everything here is also limited by the manageable OUs and groups in Settings &gt; AD Integration, and protected objects can never be changed.
-        Tick a section to limit this role to the boxes you choose. If two roles are given to one person, the person can manage what either allows.
+        Tick a section to limit this role, then tick the OUs (any level of the tree) or groups it may manage; a ticked OU includes everything below it. If two roles are given to one person, the person can manage what either allows.
       </p>
       {SECTIONS.map(({ key, optionsKey, title, what }) => {
         const all = options[optionsKey];
@@ -42,7 +43,7 @@ export function RoleScopeEditor({ value, onChange, options, readOnly }: {
               <strong>Limit {title.toLowerCase()}</strong>
               <span className="muted small"> {limited ? `Only the ${what} that are ticked below.` : 'No limit from this role.'}</span>
             </label>
-            {limited && (
+            {limited && (key === 'groups' ? (
               <div className="scope-list list-check" role="group" aria-label={`${title} this role can manage`}>
                 {all.length === 0 && <div className="empty">Nothing is on the manageable list in Settings &gt; AD Integration yet.</div>}
                 {all.map((o) => (
@@ -53,7 +54,11 @@ export function RoleScopeEditor({ value, onChange, options, readOnly }: {
                   </label>
                 ))}
               </div>
-            )}
+            ) : (
+              <div className="scope-list" role="group" aria-label={`${title} this role can manage`}>
+                <OuCheckTree kind={key === 'userOus' ? 'users' : 'computers'} label={title.toLowerCase()} selected={list} onChange={(next) => set(key, next)} readOnly={readOnly} />
+              </div>
+            ))}
             {limited && list.length === 0 && <Note kind="warning">Nothing is ticked, so this role cannot change any {title.toLowerCase()}.</Note>}
           </div>
         );

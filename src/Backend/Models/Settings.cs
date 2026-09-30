@@ -4,6 +4,9 @@ public sealed class GeneralSettings
 {
     public string ProductName { get; set; } = "";
     public string EnvironmentLabel { get; set; } = "";
+    /// <summary>Colour of the environment badge as #rrggbb; empty = the automatic colour for the label (Production red, Test blue, others amber).</summary>
+    /// <summary>null only while binding a request that did not send it (an older client); everything stored or returned is a string.</summary>
+    public string? EnvironmentLabelColor { get; set; }
     public string TimeZone { get; set; } = "UTC";
     public string DateFormat { get; set; } = "yyyy-MM-dd";
     public string SupportContact { get; set; } = "";

@@ -41,7 +41,7 @@ describe('theme variables', () => {
 
 describe('settings validation (mirrors the server)', () => {
   const general = {
-    productName: 'P', environmentLabel: 'Test', timeZone: 'UTC', dateFormat: 'yyyy-MM-dd', supportContact: '', idleTimeoutMinutes: 30, absoluteTimeoutMinutes: 480,
+    productName: 'P', environmentLabel: 'Test', environmentLabelColor: '', timeZone: 'UTC', dateFormat: 'yyyy-MM-dd', supportContact: '', idleTimeoutMinutes: 30, absoluteTimeoutMinutes: 480,
     banner: { enabled: false, type: 'Information' as const, text: '', startLocal: null, endLocal: null },
   };
 
@@ -54,6 +54,12 @@ describe('settings validation (mirrors the server)', () => {
     expect(validateGeneral({ ...general, banner: { ...general.banner, enabled: true, text: '' } }).bannerText).toBeTruthy();
     expect(validateGeneral({ ...general, banner: { ...general.banner, text: 'x'.repeat(301) } }).bannerText).toMatch(/300/);
     expect(validateGeneral({ ...general, banner: { ...general.banner, startLocal: '2026-03-05T10:00', endLocal: '2026-03-05T09:00' } }).bannerEnd).toBeTruthy();
+  });
+
+  it('accepts an automatic or hex environment label colour and rejects anything else', () => {
+    expect(validateGeneral({ ...general, environmentLabelColor: '#aa3355' })).toEqual({});
+    expect(validateGeneral({ ...general, environmentLabelColor: '' })).toEqual({});
+    for (const bad of ['red', '#12345', '#gggggg', 'aa3355']) expect(validateGeneral({ ...general, environmentLabelColor: bad }).environmentLabelColor).toBeTruthy();
   });
 
   it('rejects colours that are not hex values', () => {

@@ -7,12 +7,14 @@ import { get, qs } from '../../Services/api';
 import type { Paged } from '../../Services/types';
 import { LogDetail } from '../LogsPage';
 
+const PAGE_SIZE = 20;
+
 /** Everything done to this object through this application (Activity History tab of a drawer). */
 export function ActivityHistory({ path, reloadKey }: { path: string; reloadKey?: number }) {
   const { dateTime } = useShell();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<number | null>(null);
-  const data = useAsync(() => get<Paged<LogRow>>(path + qs({ page, pageSize: 10 })), [path, page, reloadKey]);
+  const data = useAsync(() => get<Paged<LogRow>>(path + qs({ page, pageSize: PAGE_SIZE })), [path, page, reloadKey]);
   return (
     <>
       <Note>This shows changes made through this application only. Changes made with other tools are not shown.</Note>
@@ -25,7 +27,7 @@ export function ActivityHistory({ path, reloadKey }: { path: string; reloadKey?:
           { key: 'r', header: 'Result', render: (r) => <ResultTag result={r.result} /> },
           { key: 'j', header: 'Justification', render: (r) => r.justification ?? '' },
         ]} />
-      {data.data && <Pagination page={page} pageSize={10} total={data.data.total} onPage={setPage} />}
+      {data.data && <Pagination page={page} pageSize={PAGE_SIZE} total={data.data.total} onPage={setPage} />}
       {open !== null && <LogDetail id={open} onClose={() => setOpen(null)} />}
     </>
   );

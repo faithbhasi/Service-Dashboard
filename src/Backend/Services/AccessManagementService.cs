@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ServiceDashboard.Data;
 using ServiceDashboard.Models;
+using ServiceDashboard.Modules.ActiveDirectory.Providers;
 
 namespace ServiceDashboard.Services;
 
@@ -290,19 +291,21 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
         existing ??= AdScope.Unrestricted;
 
         var catalog = services.GetService<IAdScopeCatalog>();
-        var options = catalog == null ? new AdScopeOptions([], [], []) : await catalog.GetOptionsAsync();
 
-        async Task Check(string label, string[] relevant, List<string>? want, List<string>? had, List<string>? mine, IReadOnlyList<AdScopeOption> allowed)
+        async Task Check(string label, string kind, string[] relevant, List<string>? want, List<string>? had, List<string>? mine)
         {
             if (want == null && had == null && !rolePermissions.Any(relevant.Contains)) return; // nothing to limit for a role that cannot change these
-            var unknown = (want ?? []).Where(d => !allowed.Any(a => string.Equals(a.Dn, d, StringComparison.OrdinalIgnoreCase))).ToList();
+            // Only entries that are new have to be selectable now; one that was already there stays even if Settings has moved on since.
+            var unknown = new List<string>();
+            foreach (var d in (want ?? []).Where(d => !(had ?? []).Any(h => DnText.Equal(h, d))))
+                if (catalog == null || !await catalog.IsSelectableAsync(kind, d)) unknown.Add(d);
             if (unknown.Count > 0)
                 throw new ApiException(400, "Not on the allowed list", $"These {label} are not on the manageable list in Settings > AD Integration: {string.Join("; ", unknown)}", "validation");
 
             var callerCan = relevant.Any(caller.Permissions.Contains);
             // Anything the person could not manage themselves (or a role broader than they may grant) is refused.
             var reference = callerCan ? mine : had;
-            var widens = reference != null && (want == null || want.Any(d => !reference.Contains(d, StringComparer.OrdinalIgnoreCase)));
+            var widens = reference != null && (want == null || want.Any(d => !Within(d, reference, kind)));
             if (want == null && !rolePermissions.Any(relevant.Contains)) widens = false; // "no limit" only matters to a role that can change these objects
             if (!widens) return;
             var why = callerCan
@@ -316,20 +319,24 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
         }
 
         var mineScope = caller.AdScope;
-        await Check("user OUs", AccessService.UserChangePermissions, next.UserOus, existing.UserOus, mineScope.UserOus, options.UserOus);
-        await Check("computer OUs", AccessService.ComputerChangePermissions, next.ComputerOus, existing.ComputerOus, mineScope.ComputerOus, options.ComputerOus);
-        await Check("groups", AccessService.GroupChangePermissions, next.Groups, existing.Groups, mineScope.Groups, options.Groups);
+        await Check("user OUs", "users", AccessService.UserChangePermissions, next.UserOus, existing.UserOus, mineScope.UserOus);
+        await Check("computer OUs", "computers", AccessService.ComputerChangePermissions, next.ComputerOus, existing.ComputerOus, mineScope.ComputerOus);
+        await Check("groups", "groups", AccessService.GroupChangePermissions, next.Groups, existing.Groups, mineScope.Groups);
         return next;
     }
+
+    /// <summary>OUs are "within" when they are the same as, or below, one of the OUs in the list (a scope OU covers its sub-OUs); groups must match exactly.</summary>
+    private static bool Within(string dn, List<string> reference, string kind) =>
+        reference.Any(r => kind == "groups" ? DnText.Equal(r, dn) : DnText.IsUnderOrEqual(dn, r));
 
     /// <summary>A role broader than the assigner's own reach cannot be handed out (for example by assigning it to someone).</summary>
     private async Task RequireScopeWithinAsync(CurrentUserInfo caller, Role role, string action, object target)
     {
         var scope = AdScope.Parse(role.AdScopeJson);
         var mine = caller.AdScope;
-        bool Wider(List<string>? want, List<string>? have) => have != null && (want == null || want.Any(d => !have.Contains(d, StringComparer.OrdinalIgnoreCase)));
+        bool Wider(List<string>? want, List<string>? have, string kind) => have != null && (want == null || want.Any(d => !Within(d, have, kind)));
         if (role.Id == DefaultRoles.AdminsId) return; // already guarded by the permission check
-        if (Wider(scope.UserOus, mine.UserOus) || Wider(scope.ComputerOus, mine.ComputerOus) || Wider(scope.Groups, mine.Groups))
+        if (Wider(scope.UserOus, mine.UserOus, "users") || Wider(scope.ComputerOus, mine.ComputerOus, "computers") || Wider(scope.Groups, mine.Groups, "groups"))
             throw await Deny(action, target, "This role can manage more of Active Directory than you can, so you cannot assign it.", 403);
     }
 }

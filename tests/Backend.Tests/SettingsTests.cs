@@ -294,4 +294,32 @@ public class SettingsTests
         Assert.Empty(Directory.GetFiles(paths.LogoDirectory));
         Assert.Equal(2, app.Db(db => db.AuditLogs.Count(a => a.Action == "settings.personalization.logo")));
     }
+
+    [Fact]
+    public async Task The_environment_label_colour_is_validated_saved_and_shown_in_the_shell()
+    {
+        using var app = new TestApp();
+        var c = await app.NewClient().SignInAsync("dev.admin");
+        foreach (var bad in new[] { "red", "#12345", "#gggggg", "#1234567", "rgb(1,2,3)", "url(x)" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await c.Put("/api/settings/general", General(g => g["environmentLabelColor"] = bad))).StatusCode);
+        Assert.Equal("", (await c.Json(await c.Get("/api/settings/shell"))).GetProperty("environmentLabelColor").GetString()); // automatic by default
+
+        Assert.Equal(HttpStatusCode.OK, (await c.Put("/api/settings/general", General(g => g["environmentLabelColor"] = "#AA3355"))).StatusCode);
+        Assert.Equal("#aa3355", (await c.Json(await c.Get("/api/settings/shell"))).GetProperty("environmentLabelColor").GetString());
+        Assert.Equal("#aa3355", (await c.Json(await c.Get("/api/settings/general"))).GetProperty("environmentLabelColor").GetString());
+
+        Assert.Equal(HttpStatusCode.OK, (await c.Put("/api/settings/general", General(g => g["environmentLabelColor"] = ""))).StatusCode); // back to automatic
+        Assert.Equal("", (await c.Json(await c.Get("/api/settings/shell"))).GetProperty("environmentLabelColor").GetString());
+        Assert.Contains(app.Db(db => db.AuditLogs.ToList()), a => a.Action == "settings.general.update" && a.NewValue!.Contains("aa3355"));
+    }
+
+    [Fact]
+    public async Task A_client_that_leaves_the_environment_colour_out_does_not_reset_it()
+    {
+        using var app = new TestApp();
+        var c = await app.NewClient().SignInAsync("dev.admin");
+        Assert.Equal(HttpStatusCode.OK, (await c.Put("/api/settings/general", General(g => g["environmentLabelColor"] = "#aa3355"))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.Put("/api/settings/general", General(g => g.Remove("environmentLabelColor")))).StatusCode); // an older client
+        Assert.Equal("#aa3355", (await c.Json(await c.Get("/api/settings/shell"))).GetProperty("environmentLabelColor").GetString());
+    }
 }

@@ -102,7 +102,8 @@ export function Drawer({ open, onClose, header, children, wide = false }: {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    // Esc closes the top-most layer only: a confirmation dialog open on top of this pop-up takes the key for itself.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !ref.current?.querySelector('.modal-root')) onClose(); };
     document.addEventListener('keydown', onKey);
     ref.current?.focus();
     return () => document.removeEventListener('keydown', onKey);
