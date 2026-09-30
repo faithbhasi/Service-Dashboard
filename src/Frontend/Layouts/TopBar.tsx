@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { GlobalSearch } from '../Components/GlobalSearch';
 import { Icon } from '../Components/Icon';
 import { useAuth } from '../Hooks/AuthContext';
 import { useShell } from '../Hooks/ShellContext';
 import { getCsrfToken } from '../Services/api';
+import { readableOn } from '../Themes/contrast';
 import { useTheme, type ThemePreference } from '../Themes/ThemeProvider';
 
 const themeOrder: ThemePreference[] = ['light', 'dark', 'system'];
@@ -30,11 +32,19 @@ export function TopBar({ onToggleNav }: { onToggleNav: () => void }) {
     <header className="topbar">
       <div className="topbar-left">
         <button className="btn btn-ghost topbar-menu" onClick={onToggleNav} aria-label="Toggle navigation"><Icon name="menu" /></button>
-        {logoKind
-          ? <img className="logo" alt="" src={`/api/settings/personalization/logo/${logoKind}?v=${branding?.assetVersion ?? ''}`} />
-          : <span className="logo-fallback" aria-hidden="true">{productName.slice(0, 1)}</span>}
-        <span className="product-name">{productName}</span>
-        {shell?.environmentLabel && <span className={`env-badge env-${shell.environmentLabel.toLowerCase()}`}>{shell.environmentLabel}</span>}
+        {/* The logo and the name take you back to Home. */}
+        <Link to="/" className="brand" aria-label={`${productName || 'Home'} - go to Home`} title="Go to Home">
+          {logoKind
+            ? <img className="logo" alt="" src={`/api/settings/personalization/logo/${logoKind}?v=${branding?.assetVersion ?? ''}`} />
+            : <span className="logo-fallback" aria-hidden="true">{productName.slice(0, 1)}</span>}
+          <span className="product-name">{productName}</span>
+        </Link>
+        {shell?.environmentLabel && (
+          <span className={`env-badge env-${shell.environmentLabel.toLowerCase()}`}
+            style={shell.environmentLabelColor ? { background: shell.environmentLabelColor, color: readableOn(shell.environmentLabelColor) } : undefined}>
+            {shell.environmentLabel}
+          </span>
+        )}
       </div>
 
       <div className="topbar-center"><GlobalSearch /></div>

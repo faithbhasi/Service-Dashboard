@@ -14,7 +14,9 @@ public sealed class AdScope
     /// <summary>Groups users may be added to or removed from by this role.</summary>
     public List<string>? Groups { get; set; }
 
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool IsUnrestricted => UserOus == null && ComputerOus == null && Groups == null;
+    [System.Text.Json.Serialization.JsonIgnore]
     public static AdScope Unrestricted => new();
 
     public static AdScope Parse(string? json)
@@ -34,7 +36,15 @@ public interface IAdScopeCatalog
 {
     /// <summary>The entries a role scope can be chosen from: the global manageable OUs and groups.</summary>
     Task<AdScopeOptions> GetOptionsAsync();
+
+    /// <summary>Children of an OU (or the domain root), or OUs matching <paramref name="search"/>, for choosing what a role may manage.</summary>
+    Task<IReadOnlyList<AdScopeOuNode>> BrowseOusAsync(string kind, string? parentDn, string? search);
+
+    /// <summary>True when a role scope entry of this kind ("users", "computers" or "groups") may be chosen: it is inside the global manageable lists.</summary>
+    Task<bool> IsSelectableAsync(string kind, string dn);
 }
+
+public sealed record AdScopeOuNode(string Dn, string Name, bool HasChildren, bool Selectable, string? Reason);
 
 public sealed record AdScopeOption(string Dn, string Label);
 public sealed record AdScopeOptions(IReadOnlyList<AdScopeOption> UserOus, IReadOnlyList<AdScopeOption> ComputerOus, IReadOnlyList<AdScopeOption> Groups);

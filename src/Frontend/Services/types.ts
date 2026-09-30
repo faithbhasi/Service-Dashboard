@@ -11,7 +11,7 @@ export interface ActionPolicy { justificationRequired: boolean; justificationMin
 export interface ActionPolicies { actions: Record<string, ActionPolicy>; mustChangePasswordDefault: boolean; generatedPasswordLength: number }
 export interface Shell {
   actionPolicies: ActionPolicies;
-  productName: string; environmentLabel: string; timeZone: string; dateFormat: string; supportContact: string;
+  productName: string; environmentLabel: string; environmentLabelColor?: string; timeZone: string; dateFormat: string; supportContact: string;
   idleTimeoutMinutes: number; banner: BannerInfo | null; modules: ModuleStatus[];
 }
 export interface ThemeColors {

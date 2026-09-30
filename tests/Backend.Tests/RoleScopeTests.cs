@@ -191,4 +191,103 @@ public class RoleScopeTests
         Assert.Equal(HttpStatusCode.Forbidden, (await mgr.Put($"/api/admin/roles/{laptop.Id}", body(new { computerOus = (string[]?)null }))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await mgr.Put($"/api/admin/roles/{laptop.Id}", body(new { computerOus = Array.Empty<string>() }))).StatusCode); // narrowing is fine
     }
+
+    // ---------------------------------------------------------------- the OU tree
+
+    private static async Task<JsonElement[]> Tree(TestClient c, string kind, string? parent = null, string? q = null) =>
+        (await c.Json(await c.Get($"/api/admin/roles/ad-ou-tree?kind={kind}" + (parent == null ? "" : "&parent=" + Uri.EscapeDataString(parent)) + (q == null ? "" : "&q=" + Uri.EscapeDataString(q)))))
+            .EnumerateArray().ToArray();
+
+    [Fact]
+    public async Task The_whole_OU_tree_can_be_browsed_and_only_OUs_inside_the_manageable_lists_can_be_chosen()
+    {
+        using var app = new TestApp();
+        var admin = await app.NewClient().SignInAsync("dev.admin");
+        var roots = await Tree(admin, "users");
+        var corp = roots.Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Corp);
+        Assert.False(corp.GetProperty("selectable").GetBoolean()); // browsable, but not itself on the manageable list
+        Assert.True(corp.GetProperty("hasChildren").GetBoolean());
+        Assert.Contains(roots, n => n.GetProperty("dn").GetString() == FakeDirectoryData.DomainControllers && !n.GetProperty("selectable").GetBoolean());
+
+        var inside = await Tree(admin, "users", FakeDirectoryData.Corp);
+        Assert.True(inside.Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Staff).GetProperty("selectable").GetBoolean());
+        Assert.False(inside.Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Servers).GetProperty("selectable").GetBoolean());
+        Assert.NotEmpty(inside.Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Servers).GetProperty("reason").GetString()!);
+
+        // Sub-OUs of a manageable OU can be chosen, and the two kinds use their own lists.
+        var sales = (await Tree(admin, "users", FakeDirectoryData.Staff)).Single(n => n.GetProperty("name").GetString() == "Sales");
+        Assert.True(sales.GetProperty("selectable").GetBoolean());
+        Assert.True((await Tree(admin, "computers", FakeDirectoryData.Corp)).Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Laptops).GetProperty("selectable").GetBoolean());
+        Assert.Contains(await Tree(admin, "users", q: "Sales"), n => n.GetProperty("dn").GetString() == "OU=Sales," + FakeDirectoryData.Staff);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.Get("/api/admin/roles/ad-ou-tree?kind=groups")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await (await app.NewClient().SignInAsync("dev.helpdesk")).Get("/api/admin/roles/ad-ou-tree?kind=users")).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_role_can_be_limited_to_one_sub_OU_and_covers_what_is_below_it()
+    {
+        using var app = new TestApp();
+        var admin = await app.NewClient().SignInAsync("dev.admin");
+        var sales = "OU=Sales," + FakeDirectoryData.Staff;
+        Assert.Equal(HttpStatusCode.OK, (await SetScope(admin, app, "Helpdesk (sample)", new { userOus = new[] { sales } })).StatusCode);
+
+        var help = await app.NewClient().SignInAsync("dev.helpdesk");
+        // dave.locked is in Staff/Sales: allowed. alice.smith is in Staff/Engineering: the global list allows it, the role does not.
+        Assert.Equal(HttpStatusCode.OK, (await help.Post($"/api/modules/ad/users/{UserGuid("dave.locked")}/unlock", Body())).StatusCode);
+        var denied = await help.Post($"/api/modules/ad/users/{UserGuid("alice.smith")}/unlock", Body());
+        Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        Assert.Contains("Your role", await denied.Content.ReadAsStringAsync());
+
+        // A sub-OU of something the global list does not allow cannot be chosen, nor can a made-up one.
+        Assert.Equal(HttpStatusCode.BadRequest, (await SetScope(admin, app, "Helpdesk (sample)", new { userOus = new[] { "OU=Sales," + FakeDirectoryData.Servers } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await SetScope(admin, app, "Helpdesk (sample)", new { userOus = new[] { "not a dn" } })).StatusCode);
+        // An entry that was already there stays even after a save that does not touch it.
+        Assert.Equal(HttpStatusCode.OK, (await SetScope(admin, app, "Helpdesk (sample)", new { userOus = new[] { sales }, groups = new[] { GroupDn("GG-Sales") } })).StatusCode);
+    }
+
+    [Fact]
+    public async Task A_limited_manager_can_hand_out_a_sub_OU_of_their_own_but_not_a_sibling()
+    {
+        using var app = new TestApp();
+        var admin = await app.NewClient().SignInAsync("dev.admin");
+        await admin.Post("/api/admin/roles", new
+        {
+            name = "Staff manager", adScope = new { userOus = new[] { FakeDirectoryData.Staff } },
+            permissions = new[] { Permissions.AdUsersRead, Permissions.AdUsersUnlock, Permissions.AdminRolesManage, Permissions.AdminUsersManage },
+        });
+        await admin.Put($"/api/admin/users/{app.UserId("dev.user")}/roles", new { roleIds = new[] { app.RoleId("Staff manager") } });
+        var mgr = await app.NewClient().SignInAsync("dev.user");
+        var narrower = await mgr.Post("/api/admin/roles", new { name = "Sales only", permissions = new[] { Permissions.AdUsersUnlock }, adScope = new { userOus = new[] { "OU=Sales," + FakeDirectoryData.Staff } } });
+        Assert.Equal(HttpStatusCode.OK, narrower.StatusCode); // below their own Staff OU: fine
+        var sibling = await mgr.Post("/api/admin/roles", new { name = "Contractors only", permissions = new[] { Permissions.AdUsersUnlock }, adScope = new { userOus = new[] { FakeDirectoryData.Contractors } } });
+        Assert.Equal(HttpStatusCode.Forbidden, sibling.StatusCode);
+        // The tree they see marks what is outside their own reach.
+        var tree = await Tree(mgr, "users", FakeDirectoryData.Corp);
+        Assert.False(tree.Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Contractors).GetProperty("selectable").GetBoolean());
+        Assert.True(tree.Single(n => n.GetProperty("dn").GetString() == FakeDirectoryData.Staff).GetProperty("selectable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_made_up_OU_under_an_allowed_OU_cannot_be_chosen_and_the_options_follow_the_managers_reach()
+    {
+        using var app = new TestApp();
+        var admin = await app.NewClient().SignInAsync("dev.admin");
+        var ghost = await SetScope(admin, app, "Helpdesk (sample)", new { userOus = new[] { "OU=DoesNotExist," + FakeDirectoryData.Staff } });
+        Assert.Equal(HttpStatusCode.BadRequest, ghost.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await SetScope(admin, app, "Helpdesk (sample)", new { userOus = new[] { "OU=Sales," + FakeDirectoryData.Staff + ",DC=other,DC=domain" } })).StatusCode);
+
+        // A manager limited to Staff is offered only what they could hand out themselves (so "Limit users" does not start with a 403).
+        await admin.Post("/api/admin/roles", new
+        {
+            name = "Staff manager", adScope = new { userOus = new[] { FakeDirectoryData.Staff } },
+            permissions = new[] { Permissions.AdUsersRead, Permissions.AdUsersUnlock, Permissions.AdminRolesManage },
+        });
+        await admin.Put($"/api/admin/users/{app.UserId("dev.user")}/roles", new { roleIds = new[] { app.RoleId("Staff manager") } });
+        var mgr = await app.NewClient().SignInAsync("dev.user");
+        var options = await mgr.Json(await mgr.Get("/api/admin/roles/ad-scope-options"));
+        Assert.Equal([FakeDirectoryData.Staff], options.GetProperty("userOus").EnumerateArray().Select(o => o.GetProperty("dn").GetString()).ToArray());
+        var adminOptions = await admin.Json(await admin.Get("/api/admin/roles/ad-scope-options"));
+        Assert.Equal(2, adminOptions.GetProperty("userOus").GetArrayLength()); // admins still see both
+    }
 }

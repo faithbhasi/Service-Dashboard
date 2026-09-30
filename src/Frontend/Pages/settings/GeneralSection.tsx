@@ -6,11 +6,12 @@ import { useSettingsForm } from '../../Hooks/useSettingsForm';
 import { get, put } from '../../Services/api';
 import { DATE_FORMATS } from '../../Services/format';
 import { Permissions } from '../../Services/permissions';
+import { readableOn } from '../../Themes/contrast';
 import { SaveBar, SectionShell } from './SettingsBits';
 
 interface Banner { enabled: boolean; type: 'Information' | 'Warning' | 'Maintenance'; text: string; startLocal: string | null; endLocal: string | null }
 interface General {
-  productName: string; environmentLabel: string; timeZone: string; dateFormat: string; supportContact: string;
+  productName: string; environmentLabel: string; environmentLabelColor: string; timeZone: string; dateFormat: string; supportContact: string;
   idleTimeoutMinutes: number; absoluteTimeoutMinutes: number; banner: Banner;
 }
 export const BANNER_MAX = 300;
@@ -19,6 +20,7 @@ export function validateGeneral(v: General): Record<string, string> {
   const e: Record<string, string> = {};
   if (!v.productName.trim() || v.productName.length > 100) e.productName = 'Enter a product name of up to 100 characters.';
   if (v.environmentLabel.length > 30) e.environmentLabel = 'Up to 30 characters.';
+  if (v.environmentLabelColor && !/^#[0-9a-fA-F]{6}$/.test(v.environmentLabelColor)) e.environmentLabelColor = 'Use a colour like #1f5fbf.';
   try { new Intl.DateTimeFormat('en', { timeZone: v.timeZone }); } catch { e.timeZone = 'Not a known time zone. Use an IANA name such as Europe/London or UTC.'; }
   if (v.supportContact.length > 200) e.supportContact = 'Up to 200 characters.';
   if (!(v.idleTimeoutMinutes >= 5 && v.idleTimeoutMinutes <= 1440)) e.idle = 'Between 5 and 1440 minutes.';
@@ -54,6 +56,23 @@ export function GeneralSection() {
               </Field>
               <Field label="Environment label" htmlFor="g-env" error={form.errors.environmentLabel} hint="Shown as a badge in the top bar, for example Test or Production.">
                 <input id="g-env" value={v.environmentLabel} disabled={!canEdit} maxLength={30} onChange={(e) => form.setValue({ ...v, environmentLabel: e.target.value })} />
+              </Field>
+              <Field label="Environment label colour" htmlFor="g-envcolor" error={form.errors.environmentLabelColor}
+                hint="The colour of the badge. Leave on automatic to use red for Production, blue for Test and amber for anything else.">
+                <div className="row gap wrap">
+                  <input id="g-envcolor" type="color" style={{ width: 52, height: 34, padding: 2 }} disabled={!canEdit} aria-label="Environment label colour"
+                    value={/^#[0-9a-fA-F]{6}$/.test(v.environmentLabelColor) ? v.environmentLabelColor : '#b26a00'}
+                    onChange={(e) => form.setValue({ ...v, environmentLabelColor: e.target.value })} />
+                  <input aria-label="Environment label colour (hex)" style={{ width: 110 }} placeholder="Automatic" disabled={!canEdit} maxLength={7}
+                    value={v.environmentLabelColor} onChange={(e) => form.setValue({ ...v, environmentLabelColor: e.target.value.trim() })} />
+                  <button type="button" className="btn btn-sm" disabled={!canEdit || !v.environmentLabelColor} onClick={() => form.setValue({ ...v, environmentLabelColor: '' })}>Use automatic colour</button>
+                  {v.environmentLabel && (
+                    <span className={`env-badge env-${v.environmentLabel.toLowerCase()}`} aria-label="Preview"
+                      style={/^#[0-9a-fA-F]{6}$/.test(v.environmentLabelColor) ? { background: v.environmentLabelColor, color: readableOn(v.environmentLabelColor) } : undefined}>
+                      {v.environmentLabel}
+                    </span>
+                  )}
+                </div>
               </Field>
               <Field label="Time zone" htmlFor="g-tz" error={form.errors.timeZone} hint="Dates are stored in UTC and shown in this zone.">
                 <input id="g-tz" list="zones" value={v.timeZone} disabled={!canEdit} onChange={(e) => form.setValue({ ...v, timeZone: e.target.value })} />

@@ -37,6 +37,7 @@ public sealed class SettingsController(SettingsService settings, ModuleCatalog m
         {
             productName = general.ProductName,
             environmentLabel = general.EnvironmentLabel,
+            environmentLabelColor = general.EnvironmentLabelColor ?? "",
             timeZone = general.TimeZone,
             dateFormat = general.DateFormat,
             supportContact = general.SupportContact,

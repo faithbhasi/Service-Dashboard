@@ -24,12 +24,18 @@ public sealed class SettingsManageController(SettingsService settings, ModuleCat
     // ------------------------------------------------------------ General (+ banner)
 
     [HttpGet("general"), Authorize(Policy = PermissionPolicies.SettingsAccess)]
-    public async Task<IActionResult> GetGeneral() => Ok(await settings.GetGeneralAsync());
+    public async Task<IActionResult> GetGeneral()
+    {
+        var g = await settings.GetGeneralAsync();
+        g.EnvironmentLabelColor ??= "";
+        return Ok(g);
+    }
 
     [HttpPut("general"), Authorize(Policy = Permissions.SettingsManage)]
     public async Task<IActionResult> PutGeneral([FromBody] GeneralSettings value)
     {
         var current = await settings.GetGeneralAsync();
+        value.EnvironmentLabelColor ??= current.EnvironmentLabelColor ?? ""; // a client that does not send the colour keeps what is set
         var next = ValidateGeneral(value);
         await settings.SaveAsync(SettingKeys.General, next, await WhoAsync(), settings.DefaultGeneral);
 
@@ -51,7 +57,7 @@ public sealed class SettingsManageController(SettingsService settings, ModuleCat
         return Ok(next);
     }
 
-    private static object WithoutBanner(GeneralSettings g) => new { g.ProductName, g.EnvironmentLabel, g.TimeZone, g.DateFormat, g.SupportContact, g.IdleTimeoutMinutes, g.AbsoluteTimeoutMinutes };
+    private static object WithoutBanner(GeneralSettings g) => new { g.ProductName, g.EnvironmentLabel, g.EnvironmentLabelColor, g.TimeZone, g.DateFormat, g.SupportContact, g.IdleTimeoutMinutes, g.AbsoluteTimeoutMinutes };
 
     private static string Serialize(object o) => JsonSerializer.Serialize(o, SettingsService.Json);
 
@@ -61,6 +67,8 @@ public sealed class SettingsManageController(SettingsService settings, ModuleCat
         if (name.Length is 0 or > 100) throw Invalid("The product name must be 1 to 100 characters.");
         var env = (v.EnvironmentLabel ?? "").Trim();
         if (env.Length > 30) throw Invalid("The environment label can be up to 30 characters.");
+        var envColor = (v.EnvironmentLabelColor ?? "").Trim();
+        if (envColor.Length > 0 && !System.Text.RegularExpressions.Regex.IsMatch(envColor, @"\A#[0-9a-fA-F]{6}\z")) throw Invalid("The environment label colour must look like #1f5fbf.");
         var tz = (v.TimeZone ?? "").Trim();
         try { TimeZoneInfo.FindSystemTimeZoneById(tz); } catch (Exception) { throw Invalid($"'{tz}' is not a known time zone. Use an IANA name such as Europe/London or UTC."); }
         if (!DateFormats.Contains(v.DateFormat)) throw Invalid("Choose one of the listed date formats.");
@@ -82,7 +90,7 @@ public sealed class SettingsManageController(SettingsService settings, ModuleCat
 
         return new GeneralSettings
         {
-            ProductName = name, EnvironmentLabel = env, TimeZone = tz, DateFormat = v.DateFormat, SupportContact = support,
+            ProductName = name, EnvironmentLabel = env, EnvironmentLabelColor = envColor.ToLowerInvariant(), TimeZone = tz, DateFormat = v.DateFormat, SupportContact = support,
             IdleTimeoutMinutes = v.IdleTimeoutMinutes, AbsoluteTimeoutMinutes = v.AbsoluteTimeoutMinutes,
             Banner = new BannerSettings
             {

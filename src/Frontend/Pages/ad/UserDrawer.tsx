@@ -40,6 +40,7 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
         <div className="summary">
           <div className="summary-title">
             <h1>{u.displayName ?? u.samAccountName}</h1>
+            <CopyButton value={u.displayName ?? u.samAccountName} label="Copy name" iconOnly />
             <EnabledTag enabled={u.enabled} />
             {u.lockedOut && <LockedTag locked />}
             <RefreshButton onRefresh={refresh} />

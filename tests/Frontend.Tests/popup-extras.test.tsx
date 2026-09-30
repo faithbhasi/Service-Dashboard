@@ -5,6 +5,7 @@ import { PasswordResetPanel } from '../../src/Frontend/Pages/ad/ActionPanels';
 import { ComputerDrawer } from '../../src/Frontend/Pages/ad/ComputerDrawer';
 import { UserDrawer } from '../../src/Frontend/Pages/ad/UserDrawer';
 import { UsersPage } from '../../src/Frontend/Pages/ad/UsersPage';
+import { ActivityHistory } from '../../src/Frontend/Pages/ad/ActivityHistory';
 import { Pagination } from '../../src/Frontend/Components/ui';
 import type { AdUser } from '../../src/Frontend/Services/adTypes';
 
@@ -25,6 +26,7 @@ vi.mock('../../src/Frontend/Services/api', async () => {
     post: vi.fn(async () => ({})),
     get: vi.fn(async (path: string) => {
       gets.push(path);
+      if (path.includes('/activity')) return { items: [], total: 120, page: 1, pageSize: 20 };
       if (path.includes('/computers/c1')) return { computer, ouManageable: true, ouReason: null };
       if (path.includes('/users/u1')) return { user, ouManageable: true, ouReason: null };
       return { items: [], total: 120, page: 1, pageSize: 25, totalIsCapped: false };
@@ -89,6 +91,24 @@ describe('copy icons in the pop-up headers', () => {
     expect(await navigator.clipboard.readText()).toBe('WS-1');
     await u.click(screen.getByRole('button', { name: 'Copy full computer name (FQDN)' }));
     expect(await navigator.clipboard.readText()).toBe('ws-1.corp.test');
+  });
+});
+
+describe('name copy and activity history', () => {
+  it('has a copy icon next to the user\'s name as well as the username', async () => {
+    const u = userEvent.setup();
+    render(<MemoryRouter><UserDrawer id="u1" tab="" onTab={() => {}} onClose={() => {}} onChanged={() => {}} /></MemoryRouter>);
+    await screen.findByText('Alice');
+    await u.click(screen.getByRole('button', { name: 'Copy name' }));
+    expect(await navigator.clipboard.readText()).toBe('Alice');
+    expect(screen.getByRole('button', { name: 'Copy name' })).toHaveClass('is-done');
+    expect(screen.getByRole('button', { name: 'Copy username' })).toBeInTheDocument();
+  });
+
+  it('asks for 20 activity rows per page', async () => {
+    render(<MemoryRouter><ActivityHistory path="/modules/ad/users/u1/activity" /></MemoryRouter>);
+    await waitFor(() => expect(gets.some((g) => g.includes('/activity') && g.includes('pageSize=20'))).toBe(true));
+    expect(await screen.findByText('Page 1 of 6')).toBeInTheDocument(); // 120 rows at 20 a page
   });
 });
 

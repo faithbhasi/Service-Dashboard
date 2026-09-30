@@ -4,6 +4,7 @@ import { PageGuard } from '../Components/PageGuard';
 import { Card, DataTable, ErrorNote, Note, PageHeader, Spinner, Tag } from '../Components/ui';
 import { useAuth } from '../Hooks/AuthContext';
 import { useShell } from '../Hooks/ShellContext';
+import { useEffect, useState } from 'react';
 import { useAsync } from '../Hooks/useAsync';
 import { get } from '../Services/api';
 import { Permissions } from '../Services/permissions';
@@ -14,16 +15,38 @@ interface Dashboard { cards: CardData[]; lastActions: { title: string; items: Ac
 
 export const resultKind = (r: string) => (r === 'Success' ? 'success' : r === 'Failure' ? 'error' : r === 'Denied' ? 'warning' : 'neutral') as 'success' | 'error' | 'warning' | 'neutral';
 
+/** Wall-clock time in the application's time zone (Settings > General), HH:MM:SS, ticking every second. */
+export function SystemClock({ timeZone }: { timeZone: string }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const format = (zone: string) => new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(now);
+  let text: string; let zoneShown = timeZone;
+  try { text = format(timeZone); } catch { text = format('UTC'); zoneShown = 'UTC'; } // an unknown zone name must never break the page, nor show a time under the wrong label
+  return (
+    <div className="system-clock" role="timer" aria-label={`System time, ${zoneShown}`} title={`System time (${zoneShown})`}>
+      <span className="clock-time">{text}</span>
+      <span className="muted small"> {zoneShown}</span>
+    </div>
+  );
+}
+
 export function HomePage() {
   const { me, can } = useAuth();
-  const { dateTime, moduleEnabled } = useShell();
+  const { dateTime, moduleEnabled, shell } = useShell();
   const allowed = can(Permissions.DashboardRead);
   const data = useAsync(() => (allowed ? get<Dashboard>('/dashboard') : Promise.resolve(undefined)), [allowed]);
   const d = data.data;
 
   return (
     <PageGuard page="home" requires={[]}>
-      <PageHeader title="Home" subtitle={`Welcome, ${me?.displayName}.`} actions={<button className="btn btn-sm" onClick={data.reload}>Refresh</button>} />
+      <PageHeader title="Home" subtitle={`Welcome, ${me?.displayName}.`} actions={
+        <div className="home-actions">
+          <button className="btn btn-sm" onClick={data.reload}>Refresh</button>
+          <SystemClock timeZone={shell?.timeZone ?? 'UTC'} />
+        </div>} />
       {!allowed && <Note>Your role does not include the dashboard. Use the navigation or the search box to get started.</Note>}
       <ErrorNote error={data.error} />
       {allowed && data.loading && !d && <Spinner />}

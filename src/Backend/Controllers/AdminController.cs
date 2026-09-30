@@ -36,6 +36,14 @@ public sealed class AdminController(AppDbContext db, AccessService access, Acces
         return Ok(catalog == null ? new AdScopeOptions([], [], []) : await catalog.GetOptionsAsync());
     }
 
+    /// <summary>The OU tree (lazy) for ticking the OUs a role may manage. Only OUs inside the manageable lists can be chosen.</summary>
+    [HttpGet("roles/ad-ou-tree"), Authorize(Policy = PermissionPolicies.AdminAccess)]
+    public async Task<IActionResult> GetAdOuTree([FromQuery] string kind, [FromQuery] string? parent, [FromQuery] string? q, [FromServices] IServiceProvider sp)
+    {
+        var catalog = sp.GetService<IAdScopeCatalog>();
+        return Ok(catalog == null ? Array.Empty<AdScopeOuNode>() : await catalog.BrowseOusAsync(kind, parent, q));
+    }
+
     // ---------- roles (write) ----------
 
     public sealed record RoleRequest(string Name, string? Description, string[] Permissions, AdScope? AdScope = null);
