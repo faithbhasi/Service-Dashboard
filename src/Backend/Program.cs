@@ -153,8 +153,8 @@ app.UseSerilogRequestLogging(o =>
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
+app.UseAuthentication();  // before the limiter, so limits are per signed-in user rather than per IP address
 app.UseRateLimiter();
-app.UseAuthentication();
 app.UseAuthorization();
 app.UseStatusCodePages();
 

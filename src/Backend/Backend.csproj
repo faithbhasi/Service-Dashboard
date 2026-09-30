@@ -26,6 +26,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Never ship the development settings (fake AD, development sign-in) to a server. -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
     <InternalsVisibleTo Include="Backend.Tests" />
   </ItemGroup>
 

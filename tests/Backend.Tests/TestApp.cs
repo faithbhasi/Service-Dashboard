@@ -24,10 +24,11 @@ public sealed class TestApp : WebApplicationFactory<Program>
     public CapturingSink Logs { get; } = new();
     /// <summary>Extra configuration; set before the first request (the host starts lazily).</summary>
     public Dictionary<string, string?> Extra { get; } = new();
+    public string EnvironmentName { get; set; } = "Development";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment(EnvironmentName);
         builder.UseSetting("App:DataDirectory", Path.Combine(Root, "data"));
         builder.UseSetting("App:AssetDirectory", Path.Combine(Root, "assets"));
         builder.UseSetting("App:BackupDirectory", Path.Combine(Root, "backups"));
@@ -41,6 +42,22 @@ public sealed class TestApp : WebApplicationFactory<Program>
     }
 
     public TestClient NewClient() => new(this);
+
+    /// <summary>Settings for a Production start that passes the startup checks (real-looking values, no Fake provider, no dev sign-in).</summary>
+    public void UseValidProductionConfig()
+    {
+        EnvironmentName = "Production";
+        Extra["Okta:DevelopmentSignIn"] = "false";
+        Extra["ActiveDirectory:Provider"] = "Ldap";
+        Extra["ActiveDirectory:Domain"] = "example.test";
+        Extra["ActiveDirectory:Server"] = "dc.example.test";
+        Extra["ActiveDirectory:BaseDn"] = "DC=example,DC=test";
+        Extra["ActiveDirectory:UseLdaps"] = "true";
+        Extra["ActiveDirectory:VerifyCertificate"] = "true";
+        Extra["Okta:Issuer"] = "https://okta.example.test";
+        Extra["Okta:ClientId"] = "client-id";
+        Extra["Okta:ClientSecret"] = "client-secret";
+    }
 
     /// <summary>Runs a query against the app's database in its own scope.</summary>
     public T Db<T>(Func<ServiceDashboard.Data.AppDbContext, T> f)
@@ -65,8 +82,8 @@ public sealed class TestClient
     public HttpClient Http { get; }
     private string _csrf = "";
 
-    public TestClient(TestApp app) =>
-        Http = app.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true, AllowAutoRedirect = false });
+    public TestClient(TestApp app, Uri? baseAddress = null) =>
+        Http = app.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true, AllowAutoRedirect = false, BaseAddress = baseAddress ?? new Uri("http://localhost") });
 
     public async Task<TestClient> SignInAsync(string devUser)
     {
@@ -81,6 +98,10 @@ public sealed class TestClient
     }
 
     public HttpResponseMessage? LastSignIn { get; private set; }
+
+    /// <summary>Gets an anti-forgery token without signing in (as the login page does).</summary>
+    public async Task PrimeCsrfAsync() =>
+        _csrf = (await Http.GetFromJsonAsync<JsonElement>("/api/auth/config")).GetProperty("csrfToken").GetString()!;
 
     public async Task RefreshCsrfAsync()
     {
