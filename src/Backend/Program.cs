@@ -8,6 +8,7 @@ using Serilog.Core;
 using ServiceDashboard.Configuration;
 using ServiceDashboard.Data;
 using ServiceDashboard.Middleware;
+using ServiceDashboard.Modules.ActiveDirectory;
 using ServiceDashboard.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -118,7 +119,7 @@ builder.Services.AddRateLimiter(o =>
 });
 
 // ---- Modules (one registration call each) ----
-// builder.Services.AddActiveDirectoryModule(builder.Configuration);   (added in step 3)
+builder.Services.AddActiveDirectoryModule(builder.Configuration);
 
 var app = builder.Build();
 

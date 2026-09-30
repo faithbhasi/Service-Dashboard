@@ -25,6 +25,10 @@
     <PackageReference Include="System.DirectoryServices.Protocols" Version="10.0.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Backend.Tests" />
+  </ItemGroup>
+
   <!-- Publish builds the React app into wwwroot so the output is one deployable folder. -->
   <Target Name="BuildFrontend" BeforeTargets="ComputeFilesToPublish" Condition="'$(SkipFrontendBuild)' != 'true'">
     <Exec Command="npm ci" WorkingDirectory="../Frontend" />

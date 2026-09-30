@@ -65,12 +65,15 @@ public static class PermissionPolicies
     public const string LogsAccess = "any:logs.read|logs.read.own";
     public const string AdminAccess = "any:admin.users.manage|admin.roles.manage";
     public const string SettingsAccess = "any:settings.read|settings.manage|settings.personalization.manage";
+    /// <summary>Browsing the OU tree: needed by the Move OU tabs and by the allowlist editor in Settings.</summary>
+    public const string AdOuBrowse = "any:ad.users.move|ad.computers.move|settings.manage";
 
     public static readonly IReadOnlyDictionary<string, string[]> Combined = new Dictionary<string, string[]>
     {
         [LogsAccess] = [Permissions.LogsRead, Permissions.LogsReadOwn],
         [AdminAccess] = [Permissions.AdminUsersManage, Permissions.AdminRolesManage],
         [SettingsAccess] = [Permissions.SettingsRead, Permissions.SettingsManage, Permissions.SettingsPersonalizationManage],
+        [AdOuBrowse] = [Permissions.AdUsersMove, Permissions.AdComputersMove, Permissions.SettingsManage],
     };
 }
 
@@ -86,7 +89,7 @@ public static class DefaultRoles
 
     public static readonly string[] AuditorPermissions =
     [
-        Permissions.DashboardRead, Permissions.AdUsersRead, Permissions.AdComputersRead, Permissions.AdGroupsRead,
+        Permissions.DashboardRead, Permissions.AdUsersRead, Permissions.AdComputersRead, Permissions.AdGroupsRead, Permissions.AdGroupsMemberExport,
         Permissions.LogsRead, Permissions.LogsExport,
     ];
 

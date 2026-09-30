@@ -1,6 +1,9 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom';
 import { AuthProvider, useAuth } from './Hooks/AuthContext';
 import { AppLayout } from './Layouts/AppLayout';
+import { ComputersPage } from './Pages/ad/ComputersPage';
+import { GroupsPage } from './Pages/ad/GroupsPage';
+import { UsersPage } from './Pages/ad/UsersPage';
 import { AdminPage } from './Pages/AdminPage';
 import { HomePage } from './Pages/HomePage';
 import { LoginPage } from './Pages/LoginPage';
@@ -39,6 +42,9 @@ export const router = createBrowserRouter([
           children: [
             { path: '/', element: <HomePage /> },
             { path: '/admin/:tab?', element: <AdminPage /> },
+            { path: '/ad/users/:id?', element: <UsersPage /> },
+            { path: '/ad/computers/:id?', element: <ComputersPage /> },
+            { path: '/ad/groups/:id?', element: <GroupsPage /> },
             { path: '*', element: <NotFoundPage /> },
           ],
         }],
