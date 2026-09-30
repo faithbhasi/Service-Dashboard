@@ -2,6 +2,7 @@ using System.DirectoryServices.Protocols;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Security.Principal;
 using System.Text;
 using Microsoft.Extensions.Options;
 using ServiceDashboard.Configuration;
@@ -34,15 +35,8 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
         c.SessionOptions.SecureSocketLayer = _o.UseLdaps;
         c.SessionOptions.ReferralChasing = ReferralChasingOptions.None;
         // Certificate checks stay on. The switch exists only for local troubleshooting and the app refuses to start with it off in Production.
-        // (On Linux libldap does not support the callback; there, set LDAPTLS_REQCERT=never for a lab, or trust the CA.)
-        if (!_o.VerifyCertificate && OperatingSystem.IsWindows()) c.SessionOptions.VerifyServerCertificate = (_, _) => true;
-        if (!string.IsNullOrEmpty(_o.BindUsername))
-        {
-            // Local testing only (the startup checks refuse this outside Development). Basic is only used over LDAPS.
-            c.AuthType = _o.UseLdaps ? AuthType.Basic : AuthType.Negotiate;
-            c.Credential = new System.Net.NetworkCredential(_o.BindUsername, _o.BindPassword);
-        }
-        c.Bind(); // otherwise integrated: the app pool identity (the gMSA)
+        if (!_o.VerifyCertificate) c.SessionOptions.VerifyServerCertificate = (_, _) => true;
+        c.Bind(); // integrated: the app pool identity
         return c;
     }
 
@@ -373,7 +367,9 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
         if (rid <= 0) return null;
         var root = ReadOne(c, BaseDn, "(objectClass=domain)", ["objectSid"], SearchScope.Base);
         if (root == null || !root.Attributes.Contains("objectSid") || root.Attributes["objectSid"][0] is not byte[] sidBytes) return null;
-        var bytes = LdapText.AppendRid(sidBytes, rid);
+        var groupSid = new SecurityIdentifier($"{new SecurityIdentifier(sidBytes, 0)}-{rid}");
+        var bytes = new byte[groupSid.BinaryLength];
+        groupSid.GetBinaryForm(bytes, 0);
         var e = ReadOne(c, BaseDn, $"(&{LdapFilters.GroupBase}(objectSid={LdapText.EscapeBytes(bytes)}))", GroupAttrs);
         return e == null ? null : MapGroup(e);
     }
@@ -621,7 +617,7 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
             await Task.Run(() =>
             {
                 using var c = Connect();
-                steps.Add(new ConnectionStep("Bind", true, $"Bound to {_o.Server}:{_o.Port} as " + (string.IsNullOrEmpty(_o.BindUsername) ? "the application identity" : _o.BindUsername + " (local test credentials)")));
+                steps.Add(new ConnectionStep("Bind", true, $"Bound to {_o.Server}:{_o.Port} as the application identity"));
 
                 var root = ReadOne(c, BaseDn, "(objectClass=*)", ["distinguishedName"], SearchScope.Base);
                 steps.Add(new ConnectionStep("Search base", root != null, root != null ? $"Found {BaseDn}" : $"{BaseDn} was not found"));

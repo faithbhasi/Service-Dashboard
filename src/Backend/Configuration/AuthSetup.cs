@@ -54,10 +54,6 @@ public static class AuthSetup
             o.SaveTokens = true;
             o.MapInboundClaims = false;
             o.GetClaimsFromUserInfoEndpoint = false;
-            // The code comes back as a top-level GET (response_mode=query), so Lax cookies are sent. The default SameSite=None
-            // would be refused by browsers over plain http://localhost (it needs Secure), which breaks sign-in in local testing.
-            o.CorrelationCookie.SameSite = SameSiteMode.Lax;
-            o.NonceCookie.SameSite = SameSiteMode.Lax;
             o.CallbackPath = "/signin-oidc";
             o.SignedOutCallbackPath = "/signout-callback-oidc";
             o.SignedOutRedirectUri = "/login?signedOut=1";
