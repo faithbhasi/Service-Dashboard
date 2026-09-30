@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom';
 import { AuthProvider, useAuth } from './Hooks/AuthContext';
 import { AppLayout } from './Layouts/AppLayout';
+import { AdminPage } from './Pages/AdminPage';
 import { HomePage } from './Pages/HomePage';
 import { LoginPage } from './Pages/LoginPage';
 import { NoAccessPage } from './Pages/NoAccessPage';
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
           element: <RequireAccess />,
           children: [
             { path: '/', element: <HomePage /> },
+            { path: '/admin/:tab?', element: <AdminPage /> },
             { path: '*', element: <NotFoundPage /> },
           ],
         }],

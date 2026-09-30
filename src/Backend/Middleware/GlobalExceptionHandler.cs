@@ -16,6 +16,9 @@ public sealed class GlobalExceptionHandler(IProblemDetailsService problems, ILog
                 (status, title, detail, code) = (503, "Service unavailable", mue.SafeMessage, "module_unavailable");
                 log.LogError(ex, "Module unavailable");
                 break;
+            case ApiException api:
+                (status, title, detail, code) = (api.Status, api.Title, api.Detail, api.Code);
+                break;
             case OperationCanceledException when ctx.RequestAborted.IsCancellationRequested:
                 return true;
             default:

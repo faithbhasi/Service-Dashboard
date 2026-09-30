@@ -66,6 +66,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<AccessService>();
+builder.Services.AddScoped<AccessManagementService>();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<UserProvisioning>();
 builder.Services.AddScoped<ModuleCatalog>();

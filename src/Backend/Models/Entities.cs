@@ -110,3 +110,12 @@ public class ModuleUnavailableException(string safeMessage, Exception? inner = n
 {
     public string SafeMessage { get; } = safeMessage;
 }
+
+/// <summary>A request that must fail with a specific HTTP status and a safe message (safeguards, validation, conflicts).</summary>
+public class ApiException(int status, string title, string detail, string code = "error") : Exception(detail)
+{
+    public int Status { get; } = status;
+    public string Title { get; } = title;
+    public string Detail { get; } = detail;
+    public string Code { get; } = code;
+}

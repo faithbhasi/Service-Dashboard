@@ -42,7 +42,15 @@ public sealed class TestApp : WebApplicationFactory<Program>
 
     public TestClient NewClient() => new(this);
 
-    public T Service<T>(Func<T, Task> _ = null!) where T : notnull => Services.GetRequiredService<T>();
+    /// <summary>Runs a query against the app's database in its own scope.</summary>
+    public T Db<T>(Func<ServiceDashboard.Data.AppDbContext, T> f)
+    {
+        using var scope = Services.CreateScope();
+        return f(scope.ServiceProvider.GetRequiredService<ServiceDashboard.Data.AppDbContext>());
+    }
+
+    public Guid UserId(string devUser) => Db(db => db.Users.Single(u => u.Email == devUser + "@example.invalid").Id);
+    public Guid RoleId(string name) => Db(db => db.Roles.Single(r => r.Name == name).Id);
 
     protected override void Dispose(bool disposing)
     {
