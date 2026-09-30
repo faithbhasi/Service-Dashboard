@@ -6,7 +6,7 @@ import { Card, DataTable, Drawer, ErrorNote, Field, Modal, Note, PageHeader, Pag
 import { useAuth } from '../Hooks/AuthContext';
 import { useShell } from '../Hooks/ShellContext';
 import { useAsync, useDebounced } from '../Hooks/useAsync';
-import { del, downloadUrl, get, post, put, qs } from '../Services/api';
+import { del, downloadFile, get, post, put, qs } from '../Services/api';
 import { Permissions } from '../Services/permissions';
 import type { Paged, RoleRef } from '../Services/types';
 
@@ -55,6 +55,7 @@ function AppUsersTab() {
   const dq = useDebounced(q);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AppUser>();
+  const [exportError, setExportError] = useState<unknown>();
   useEffect(() => setPage(1), [dq]);
   const users = useAsync(() => get<Paged<AppUser>>('/admin/users' + qs({ q: dq, page, pageSize: 25 })), [dq, page]);
 
@@ -63,9 +64,9 @@ function AppUsersTab() {
       <div className="toolbar">
         <input type="search" placeholder="Search name or email" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search app users" />
         <span className="grow" />
-        <a className="btn" href={downloadUrl('/admin/users/export' + qs({ q: dq }))}>Export CSV</a>
+        <button className="btn" onClick={() => downloadFile('/admin/users/export' + qs({ q: dq })).catch(setExportError)}>Export CSV</button>
       </div>
-      <ErrorNote error={users.error} />
+      <ErrorNote error={users.error ?? exportError} />
       <DataTable rows={users.data?.items} loading={users.loading} rowKey={(u) => u.id} onRowClick={setSelected}
         columns={[
           { key: 'name', header: 'Name', render: (u) => <strong>{u.displayName}</strong> },

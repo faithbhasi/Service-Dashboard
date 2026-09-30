@@ -5,6 +5,7 @@ import { ComputersPage } from './Pages/ad/ComputersPage';
 import { GroupsPage } from './Pages/ad/GroupsPage';
 import { UsersPage } from './Pages/ad/UsersPage';
 import { AdminPage } from './Pages/AdminPage';
+import { LogsPage } from './Pages/LogsPage';
 import { HomePage } from './Pages/HomePage';
 import { LoginPage } from './Pages/LoginPage';
 import { NoAccessPage } from './Pages/NoAccessPage';
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
           children: [
             { path: '/', element: <HomePage /> },
             { path: '/admin/:tab?', element: <AdminPage /> },
+            { path: '/logs/:tab?', element: <LogsPage /> },
             { path: '/ad/users/:id?', element: <UsersPage /> },
             { path: '/ad/computers/:id?', element: <ComputersPage /> },
             { path: '/ad/groups/:id?', element: <GroupsPage /> },

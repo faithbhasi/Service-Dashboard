@@ -83,5 +83,23 @@ export function qs(params: Record<string, string | number | boolean | undefined 
   return s ? '?' + s : '';
 }
 
-/** Direct download link (CSV exports). The browser sends the session cookie itself. */
-export const downloadUrl = (path: string) => '/api' + path;
+
+/**
+ * Downloads a file (CSV export) through fetch so a refusal, such as "too many rows", shows a message
+ * instead of navigating away. The session cookie authorises it like any other request.
+ */
+export async function downloadFile(path: string, fallbackName = 'export.csv'): Promise<void> {
+  const res = await fetch('/api' + path, { credentials: 'same-origin' });
+  if (res.status === 401) onUnauthorized?.();
+  if (!res.ok) throw await toError(res);
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const name = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}

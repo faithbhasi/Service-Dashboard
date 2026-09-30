@@ -38,3 +38,34 @@ export function formatDateTime(iso: string | null | undefined, s: FormatSettings
 }
 
 export const defaultFormat: FormatSettings = { timeZone: 'UTC', dateFormat: 'yyyy-MM-dd' };
+
+/** Milliseconds the given time zone is ahead of UTC at the given instant. */
+export function zoneOffsetMs(date: Date, timeZone: string): number {
+  const p = parts(date, timeZone);
+  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  return asUtc - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+/** "2026-03-05T22:30" typed as wall-clock time in a time zone -> the UTC instant as an ISO string. */
+export function zonedTimeToUtcIso(local: string, timeZone: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(local);
+  if (!m) return '';
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  // Two passes handle daylight-saving boundaries.
+  let guess = wall - zoneOffsetMs(new Date(wall), timeZone);
+  guess = wall - zoneOffsetMs(new Date(guess), timeZone);
+  return new Date(guess).toISOString();
+}
+
+export function startOfTodayIso(timeZone: string, now = new Date()): string {
+  const p = parts(now, timeZone);
+  return zonedTimeToUtcIso(`${p.year}-${p.month}-${p.day}T00:00`, timeZone);
+}
+
+/** UTC instant -> "yyyy-MM-ddTHH:mm" wall-clock time in the zone (for datetime-local inputs). */
+export function utcIsoToZonedLocal(iso: string, timeZone: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = parts(d, timeZone);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}

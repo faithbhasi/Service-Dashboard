@@ -9,6 +9,8 @@ public sealed class AppOptions
     public string AssetDirectory { get; set; } = "";
     public string BackupDirectory { get; set; } = "";
     public int BackupRetentionCount { get; set; } = 7;
+    /// <summary>Run the online SQLite backup once a day (needs BackupDirectory). Off by default.</summary>
+    public bool DailyBackupEnabled { get; set; }
     /// <summary>Optional Okta group that is mapped to the Admins role on startup when no admin mapping exists yet.</summary>
     public string BootstrapAdminOktaGroup { get; set; } = "";
     public int DashboardCacheMinutes { get; set; } = 5;

@@ -32,3 +32,21 @@ describe('date formatting', () => {
     expect(formatDate(null, { timeZone: 'UTC', dateFormat: 'yyyy-MM-dd' })).toBe('');
   });
 });
+
+import { startOfTodayIso, utcIsoToZonedLocal, zonedTimeToUtcIso } from '../../src/Frontend/Services/format';
+
+describe('time zone conversion for log filters', () => {
+  it('turns wall-clock time in a zone into the right UTC instant', () => {
+    expect(zonedTimeToUtcIso('2026-03-05T09:30', 'Australia/Sydney')).toBe('2026-03-04T22:30:00.000Z');
+    expect(zonedTimeToUtcIso('2026-07-01T12:00', 'America/New_York')).toBe('2026-07-01T16:00:00.000Z'); // daylight saving
+    expect(zonedTimeToUtcIso('2026-01-01T12:00', 'UTC')).toBe('2026-01-01T12:00:00.000Z');
+  });
+  it('finds the start of today in the configured zone', () => {
+    const now = new Date('2026-03-05T22:30:00Z'); // already 6 March in Sydney
+    expect(startOfTodayIso('Australia/Sydney', now)).toBe('2026-03-05T13:00:00.000Z');
+    expect(startOfTodayIso('UTC', now)).toBe('2026-03-05T00:00:00.000Z');
+  });
+  it('round-trips for datetime-local inputs', () => {
+    expect(utcIsoToZonedLocal('2026-03-04T22:30:00.000Z', 'Australia/Sydney')).toBe('2026-03-05T09:30');
+  });
+});

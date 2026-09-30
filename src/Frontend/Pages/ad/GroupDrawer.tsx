@@ -4,7 +4,7 @@ import { GroupTags, ObjectLink, Ou, Text } from '../../Components/adUi';
 import { Card, DataTable, Drawer, ErrorNote, KeyValue, Note, Pagination, Spinner, Tag } from '../../Components/ui';
 import { useAuth } from '../../Hooks/AuthContext';
 import { useAsync, useDebounced } from '../../Hooks/useAsync';
-import { downloadUrl, get, qs } from '../../Services/api';
+import { downloadFile, get, qs } from '../../Services/api';
 import { routeFor, type AdGroup, type GroupMember, type MemberPage } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 
@@ -18,6 +18,7 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
   const q = useDebounced(input);
   const [kind, setKind] = useState('');
   const [page, setPage] = useState(1);
+  const [exportError, setExportError] = useState<unknown>();
   useEffect(() => setPage(1), [q, kind, id]);
 
   // The server searches and pages; the browser never holds the whole member list.
@@ -50,7 +51,7 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
             ]} />
           </Card>
           <Card title="Members" actions={can(Permissions.AdGroupsMemberExport) && (
-            <a className="btn btn-sm" href={downloadUrl(`/modules/ad/groups/${id}/members/export` + qs({ q, kind }))}>Export CSV</a>
+            <button className="btn btn-sm" onClick={() => downloadFile(`/modules/ad/groups/${id}/members/export` + qs({ q, kind })).catch(setExportError)}>Export CSV</button>
           )}>
             <div className="toolbar">
               <input type="search" placeholder="Search members by name, username or email" value={input}
@@ -59,7 +60,7 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
                 <option value="">All</option><option value="User">Users</option><option value="Computer">Computers</option><option value="Group">Groups</option>
               </select>
             </div>
-            <ErrorNote error={members.error} />
+            <ErrorNote error={members.error ?? exportError} />
             <DataTable<GroupMember> rows={members.data?.items} loading={members.loading} rowKey={(m) => m.id}
               onRowClick={(m) => navigate(routeFor(m.kind, m.id))} empty="No members match."
               columns={[

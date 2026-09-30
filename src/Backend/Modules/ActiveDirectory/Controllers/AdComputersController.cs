@@ -5,12 +5,13 @@ using ServiceDashboard.Middleware;
 using ServiceDashboard.Models;
 using ServiceDashboard.Modules.ActiveDirectory.Providers;
 using ServiceDashboard.Modules.ActiveDirectory.Services;
+using ServiceDashboard.Services;
 
 namespace ServiceDashboard.Modules.ActiveDirectory.Controllers;
 
 [ApiController, ModuleGate(ActiveDirectoryModule.Id)]
 [Route("api/modules/ad/computers")]
-public sealed class AdComputersController(AdDirectoryService ad, AdChangeService changes) : ControllerBase
+public sealed class AdComputersController(AdDirectoryService ad, AdChangeService changes, ObjectActivity activity) : ControllerBase
 {
     [HttpGet, Authorize(Policy = Permissions.AdComputersRead), EnableRateLimiting(RateLimitPolicies.Search)]
     public async Task<IActionResult> Search([FromQuery] string? q, [FromQuery] ComputerFilter filter = ComputerFilter.All,
@@ -24,6 +25,10 @@ public sealed class AdComputersController(AdDirectoryService ad, AdChangeService
     [HttpGet("{id:guid}/groups"), Authorize(Policy = Permissions.AdComputersRead)]
     public async Task<IActionResult> Groups(Guid id, CancellationToken ct) =>
         await ad.GetMembershipsAsync(id, DirectoryObjectKind.Computer, ct) is { } m ? Ok(m) : NotFoundProblem();
+
+    [HttpGet("{id:guid}/activity"), Authorize(Policy = Permissions.AdComputersRead), Authorize(Policy = PermissionPolicies.LogsAccess)]
+    public async Task<IActionResult> Activity(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 25) =>
+        Ok(await activity.ForAsync(id, page, pageSize));
 
     [HttpPost("{id:guid}/enable"), Authorize(Policy = Permissions.AdComputersEnable), EnableRateLimiting(RateLimitPolicies.Write)]
     public async Task<IActionResult> Enable(Guid id, [FromBody] ChangeInput req, CancellationToken ct) =>

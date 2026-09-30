@@ -72,6 +72,9 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddScoped<UserProvisioning>();
 builder.Services.AddScoped<ModuleCatalog>();
 builder.Services.AddSingleton<IAuditService, AuditService>();
+builder.Services.AddScoped<MaintenanceTasks>();
+builder.Services.AddScoped<ObjectActivity>();
+builder.Services.AddHostedService<MaintenanceService>();
 
 // ---- Authentication and authorization ----
 builder.AddAppAuthentication();

@@ -314,6 +314,8 @@ public class ChangeProcessTests
         var badBody = await bad.Content.ReadAsStringAsync();
 
         var audit = System.Text.Json.JsonSerializer.Serialize(app.Db(db => db.AuditLogs.ToList()));
+        // The request log line is written just after the response is sent, so wait for it before reading the logs.
+        for (var i = 0; i < 100 && !app.Logs.AllText().Contains("reset-password"); i++) await Task.Delay(50);
         var logs = app.Logs.AllText();
         Assert.Contains("reset-password", logs); // the capture works, so the absence below means something
         foreach (var (name, text) in new[] { ("preview", previewBody), ("response", resBody), ("rejected", rejectedBody), ("bad request", badBody), ("audit", audit), ("logs", logs) })

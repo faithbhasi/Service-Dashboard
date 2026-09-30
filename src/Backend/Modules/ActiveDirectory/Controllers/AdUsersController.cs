@@ -5,12 +5,13 @@ using ServiceDashboard.Middleware;
 using ServiceDashboard.Models;
 using ServiceDashboard.Modules.ActiveDirectory.Providers;
 using ServiceDashboard.Modules.ActiveDirectory.Services;
+using ServiceDashboard.Services;
 
 namespace ServiceDashboard.Modules.ActiveDirectory.Controllers;
 
 [ApiController, ModuleGate(ActiveDirectoryModule.Id)]
 [Route("api/modules/ad/users")]
-public sealed class AdUsersController(AdDirectoryService ad, AdChangeService changes) : ControllerBase
+public sealed class AdUsersController(AdDirectoryService ad, AdChangeService changes, ObjectActivity activity) : ControllerBase
 {
     [HttpGet, Authorize(Policy = Permissions.AdUsersRead), EnableRateLimiting(RateLimitPolicies.Search)]
     public async Task<IActionResult> Search([FromQuery] string? q, [FromQuery] UserFilter filter = UserFilter.All,
@@ -24,6 +25,11 @@ public sealed class AdUsersController(AdDirectoryService ad, AdChangeService cha
     [HttpGet("{id:guid}/groups"), Authorize(Policy = Permissions.AdUsersRead)]
     public async Task<IActionResult> Groups(Guid id, CancellationToken ct) =>
         await ad.GetMembershipsAsync(id, DirectoryObjectKind.User, ct) is { } m ? Ok(m) : NotFoundProblem("User");
+
+    /// <summary>Everything done to this user through this application. Changes made with other tools are not shown.</summary>
+    [HttpGet("{id:guid}/activity"), Authorize(Policy = Permissions.AdUsersRead), Authorize(Policy = PermissionPolicies.LogsAccess)]
+    public async Task<IActionResult> Activity(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 25) =>
+        Ok(await activity.ForAsync(id, page, pageSize));
 
     // ---------- changes: every one goes through AdChangeService (permission, validation, re-read, allowlists, dry run, audit) ----------
 

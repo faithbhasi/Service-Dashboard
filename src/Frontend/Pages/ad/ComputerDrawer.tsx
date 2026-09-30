@@ -7,6 +7,7 @@ import { useAsync } from '../../Hooks/useAsync';
 import { get } from '../../Services/api';
 import type { ComputerDetail } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
+import { ActivityHistory } from './ActivityHistory';
 import { MembershipsPanel } from './MembershipsPanel';
 import { EnableDisablePanel, MoveOuPanel } from './ActionPanels';
 
@@ -70,7 +71,7 @@ export function ComputerDrawer({ id, tab, onTab, onClose, onChanged }: {
           {active === 'enable' && <EnableDisablePanel kind="Computer" obj={c} onChanged={refresh} />}
           {active === 'move' && <MoveOuPanel kind="Computer" obj={c} manageable={detail.data!.ouManageable} reason={detail.data!.ouReason} onChanged={refresh} />}
           {active === 'groups' && <MembershipsPanel path={`/modules/ad/computers/${id}/groups`} reloadKey={version} />}
-          {active === 'activity' && <Note>Activity history is added with the audit log.</Note>}
+          {active === 'activity' && <ActivityHistory path={`/modules/ad/computers/${id}/activity`} reloadKey={version} />}
         </>
       )}
     </Drawer>

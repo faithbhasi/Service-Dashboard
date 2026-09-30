@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CopyButton, Drawer, ErrorNote, KeyValue, NotSet, Spinner, Tabs, Tag, Card, Note, type TabDef } from '../../Components/ui';
+import { CopyButton, Drawer, ErrorNote, KeyValue, NotSet, Spinner, Tabs, Tag, Card, type TabDef } from '../../Components/ui';
 import { EnabledTag, LockedTag, Ou, ObjectLink, useAdText } from '../../Components/adUi';
 import { useAuth } from '../../Hooks/AuthContext';
 import { useShell } from '../../Hooks/ShellContext';
@@ -7,6 +7,7 @@ import { useAsync } from '../../Hooks/useAsync';
 import { get } from '../../Services/api';
 import type { UserDetail } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
+import { ActivityHistory } from './ActivityHistory';
 import { MembershipsPanel } from './MembershipsPanel';
 import { AddToGroupsPanel, EnableDisablePanel, MoveOuPanel, PasswordResetPanel, RemoveFromGroupsBar, UnlockPanel } from './ActionPanels';
 
@@ -69,7 +70,7 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
           {active === 'enable' && <EnableDisablePanel kind="User" obj={u} onChanged={refresh} />}
           {active === 'move' && <MoveOuPanel kind="User" obj={u} manageable={detail.data!.ouManageable} reason={detail.data!.ouReason} onChanged={refresh} />}
           {active === 'details' && <UserDetails user={u} />}
-          {active === 'activity' && <Note>Activity history is added with the audit log.</Note>}
+          {active === 'activity' && <ActivityHistory path={`/modules/ad/users/${id}/activity`} reloadKey={version} />}
         </>
       )}
     </Drawer>
