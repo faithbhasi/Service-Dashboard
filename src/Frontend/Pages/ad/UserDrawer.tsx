@@ -9,9 +9,11 @@ import type { UserDetail } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { ActivityHistory } from './ActivityHistory';
 import { MembershipsPanel } from './MembershipsPanel';
-import { AddToGroupsPanel, EnableDisablePanel, MoveOuPanel, PasswordResetPanel, RemoveFromGroupsBar, UnlockPanel } from './ActionPanels';
+import { AccountActionsPanel, AddToGroupsPanel, MoveOuPanel, RemoveFromGroupsBar } from './ActionPanels';
 
-/** Only the tabs the user's permissions allow are shown. Add to Groups is the default when permitted. */
+/** Only the tabs the user's permissions allow are shown. Account Actions (password reset, unlock, enable/disable) comes first when permitted. */
+const LEGACY_TABS: Record<string, string> = { password: 'account', unlock: 'account', enable: 'account', 'add-groups': 'groups' };
+
 export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
   id: string; tab: string; onTab: (t: string) => void; onClose: () => void; onChanged: () => void;
 }) {
@@ -22,16 +24,14 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
   const refresh = () => { setVersion((v) => v + 1); onChanged(); };
 
   const tabs: TabDef[] = [
-    ...(can(Permissions.AdUsersGroupsAdd) ? [{ id: 'add-groups', label: 'Add to Groups' }] : []),
-    { id: 'groups', label: 'Group Memberships' },
-    ...(can(Permissions.AdUsersResetPassword) ? [{ id: 'password', label: 'Password Reset' }] : []),
-    ...(can(Permissions.AdUsersUnlock) ? [{ id: 'unlock', label: 'Unlock Account' }] : []),
-    ...(canAny(Permissions.AdUsersEnable, Permissions.AdUsersDisable) ? [{ id: 'enable', label: 'Enable / Disable' }] : []),
+    ...(canAny(Permissions.AdUsersResetPassword, Permissions.AdUsersUnlock, Permissions.AdUsersEnable, Permissions.AdUsersDisable) ? [{ id: 'account', label: 'Account Actions' }] : []),
+    { id: 'groups', label: 'Groups' },
     ...(can(Permissions.AdUsersMove) ? [{ id: 'move', label: 'Move OU' }] : []),
     { id: 'details', label: 'Account Details' },
     ...(canAny(Permissions.LogsRead, Permissions.LogsReadOwn) ? [{ id: 'activity', label: 'Activity History' }] : []),
   ];
-  const active = tabs.some((t) => t.id === tab) ? tab : tabs[0].id;
+  const wanted = LEGACY_TABS[tab] ?? tab; // old links such as ?tab=password still land in the right place
+  const active = tabs.some((t) => t.id === wanted) ? wanted : tabs[0].id;
   const u = detail.data?.user;
 
   return (
@@ -57,17 +57,15 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
       {u && (
         <>
           <Tabs tabs={tabs} active={active} onChange={onTab} />
-          {active === 'add-groups' && <AddToGroupsPanel user={u} onChanged={refresh} />}
+          {active === 'account' && <AccountActionsPanel user={u} onChanged={refresh} />}
           {active === 'groups' && (
-            <>
+            <div className="stack">
               <MembershipsPanel path={`/modules/ad/users/${id}/groups`} reloadKey={version} canRemove={can(Permissions.AdUsersGroupsRemove)} selected={selected}
-                onSelect={(gid, on) => { const n = new Set(selected); on ? n.add(gid) : n.delete(gid); setSelected(n); }} />
-              {can(Permissions.AdUsersGroupsRemove) && <RemoveFromGroupsBar user={u} selected={selected} onDone={() => { setSelected(new Set()); refresh(); }} />}
-            </>
+                onSelect={(gid, on) => { const n = new Set(selected); on ? n.add(gid) : n.delete(gid); setSelected(n); }}
+                directFooter={can(Permissions.AdUsersGroupsRemove) ? <RemoveFromGroupsBar user={u} selected={selected} onDone={() => { setSelected(new Set()); refresh(); }} /> : undefined} />
+              {can(Permissions.AdUsersGroupsAdd) && <AddToGroupsPanel user={u} onChanged={refresh} />}
+            </div>
           )}
-          {active === 'password' && <PasswordResetPanel user={u} onChanged={refresh} />}
-          {active === 'unlock' && <UnlockPanel user={u} onChanged={refresh} />}
-          {active === 'enable' && <EnableDisablePanel kind="User" obj={u} onChanged={refresh} />}
           {active === 'move' && <MoveOuPanel kind="User" obj={u} manageable={detail.data!.ouManageable} reason={detail.data!.ouReason} onChanged={refresh} />}
           {active === 'details' && <UserDetails user={u} />}
           {active === 'activity' && <ActivityHistory path={`/modules/ad/users/${id}/activity`} reloadKey={version} />}

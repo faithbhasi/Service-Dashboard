@@ -65,9 +65,10 @@ export function ActionPoliciesSection() {
           <Card title="Password reset defaults">
             <label className="check"><input type="checkbox" disabled={!canEdit} checked={v.mustChangePasswordDefault} onChange={(e) => form.setValue({ ...v, mustChangePasswordDefault: e.target.checked })} /> "User must change password at next sign-in" is ticked by default</label>
             <div className="spacer" />
-            <Field label="Generated password length" htmlFor="ap-len" error={form.errors.length}>
-              <input id="ap-len" type="number" style={{ width: 100 }} disabled={!canEdit} value={v.generatedPasswordLength} onChange={(e) => form.setValue({ ...v, generatedPasswordLength: Number(e.target.value) })} />
+            <Field label="Generated password length (characters)" htmlFor="ap-len" error={form.errors.length}>
+              <input id="ap-len" type="number" style={{ width: 100 }} disabled={!canEdit} value={v.generatedPasswordLength} min={8} max={128} onChange={(e) => form.setValue({ ...v, generatedPasswordLength: Number(e.target.value) })} />
             </Field>
+            <p className="muted small">How many characters "Generate secure password" creates on the Password reset screen (8 to 128). Whoever resets a password can still adjust it for that one reset.</p>
           </Card>
           <SaveBar dirty={form.dirty} saving={form.saving} canEdit={canEdit} onSave={() => void form.save()} onCancel={form.cancel} savedAt={form.savedAt} serverError={form.serverError} />
         </>

@@ -232,12 +232,20 @@ public sealed class AdChangeService(
         return RunWithSecureAsync(secure, () => RunAsync(new ChangeSpec
         {
             Action = "ad.user.resetPassword", PolicyKey = ActionKeys.ResetPassword, Permission = Permissions.AdUsersResetPassword,
-            TargetId = userId, Kind = DirectoryObjectKind.User, Input = req, Check = UserOuCheck,
+            TargetId = userId, Kind = DirectoryObjectKind.User, Input = req,
+            Check = async t =>
+            {
+                // "Also unlock the account" is an unlock, so it needs the unlock right as well as the reset right.
+                if (options.UnlockAccount && await currentUser.GetAsync() is { } who && !who.Has(Permissions.AdUsersUnlock))
+                    return "Unlocking the account as part of a password reset needs the unlock permission, which you do not have.";
+                return await UserOuCheck(t);
+            },
             Describe = t =>
             [
                 new DirectoryChange("Password", "Current password (not shown)", "New password (not shown)"),
                 new DirectoryChange("Must change password at next sign-in", t.User!.PasswordStatus == "MustChange" ? "Yes" : "No", options.MustChangeAtNextSignIn ? "Yes" : "No"),
-                new DirectoryChange("Account unlock", t.User.LockedOut ? "Locked" : "Not locked", options.UnlockAccount ? "Unlocked" : "Unchanged"),
+                new DirectoryChange("Account unlock", t.User.LockedOut ? "Locked" : "Not locked",
+                    !t.User.LockedOut ? "Not locked" : options.UnlockAccount ? "Unlocked" : "Stays locked"),
             ],
             // A dry run never sends a password to AD: only the target and the right to reset are checked.
             Apply = dry => provider.ResetPasswordAsync(userId, secure ?? new SecureString(), options, dry, ct),

@@ -24,6 +24,10 @@ export function Nav({ collapsed }: { collapsed: boolean }) {
   ];
   const adVisible = items.filter((i) => i.moduleId === 'ad' && canAny(...i.requires));
 
+  const showLogs = canAny(Permissions.LogsRead, Permissions.LogsReadOwn);
+  const showAdmin = canAny(Permissions.AdminUsersManage, Permissions.AdminRolesManage);
+  const showSettings = canAny(Permissions.SettingsRead, Permissions.SettingsManage, Permissions.SettingsPersonalizationManage);
+
   const link = (i: Item) => (
     <NavLink key={i.to} to={i.to} end={i.to === '/'} className={({ isActive }) => `nav-item ${i.child ? 'child' : ''} ${isActive ? 'active' : ''}`}
       title={collapsed ? i.label : undefined}>
@@ -56,12 +60,13 @@ export function Nav({ collapsed }: { collapsed: boolean }) {
         {!collapsed && <Tag>{okta?.status ?? 'Coming Soon'}</Tag>}
       </span>
 
-      {canAny(Permissions.LogsRead, Permissions.LogsReadOwn) &&
-        link({ to: '/logs', label: 'Activity and Logs', icon: 'logs', requires: [] })}
-      {canAny(Permissions.AdminUsersManage, Permissions.AdminRolesManage) &&
-        link({ to: '/admin', label: 'Users and Groups', icon: 'access', requires: [] })}
-      {canAny(Permissions.SettingsRead, Permissions.SettingsManage, Permissions.SettingsPersonalizationManage) &&
-        link({ to: '/settings', label: 'Settings', icon: 'settings', requires: [] })}
+      {(showLogs || showAdmin || showSettings) && (
+        <div className="nav-bottom">
+          {showLogs && link({ to: '/logs', label: 'Activity and Logs', icon: 'logs', requires: [] })}
+          {showAdmin && link({ to: '/admin', label: 'Users and Groups', icon: 'access', requires: [] })}
+          {showSettings && link({ to: '/settings', label: 'Settings', icon: 'settings', requires: [] })}
+        </div>
+      )}
     </nav>
   );
 }

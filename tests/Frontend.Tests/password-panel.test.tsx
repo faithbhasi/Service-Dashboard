@@ -122,6 +122,59 @@ describe('password reset panel', () => {
   });
 });
 
+describe('generated password length', () => {
+  it('uses the policy length by default, shows it, and lets the operator change it for one reset', async () => {
+    const u = userEvent.setup();
+    render(<PasswordResetPanel user={user} onChanged={() => {}} />);
+    const len = screen.getByLabelText('Characters') as HTMLInputElement;
+    expect(len.value).toBe('16');
+    await u.clear(len);
+    await u.type(len, '24');
+    await u.click(screen.getByRole('button', { name: /Generate secure password/ }));
+    expect(field(/^New password/).value).toHaveLength(24);
+  });
+
+  it('refuses lengths outside 8 to 128', async () => {
+    const u = userEvent.setup();
+    render(<PasswordResetPanel user={user} onChanged={() => {}} />);
+    const len = screen.getByLabelText('Characters') as HTMLInputElement;
+    await u.clear(len);
+    await u.type(len, '5');
+    expect(screen.getByRole('alert')).toHaveTextContent('8 to 128');
+    expect(screen.getByRole('button', { name: /Generate secure password/ })).toBeDisabled();
+    await u.clear(len);
+    await u.type(len, '129');
+    expect(screen.getByRole('button', { name: /Generate secure password/ })).toBeDisabled();
+  });
+});
+
+describe('unlock option on password reset', () => {
+  it('only offers to unlock while the account is locked, and sends it when ticked', async () => {
+    const u = userEvent.setup();
+    const { rerender } = render(<PasswordResetPanel user={user} onChanged={() => {}} />);
+    expect(screen.queryByLabelText(/Also unlock the account/)).not.toBeInTheDocument();
+    rerender(<PasswordResetPanel user={{ ...user, lockedOut: true }} onChanged={() => {}} />);
+    expect(screen.getByLabelText(/Also unlock the account/)).toBeChecked();
+    const dialog = await fillAndOpenDialog(u);
+    await u.type(within(dialog).getByLabelText(/Justification/), 'Verified by phone, ticket approved');
+    await u.type(within(dialog).getByLabelText(/Type dave to confirm/), 'dave');
+    await u.click(within(dialog).getByRole('button', { name: 'Review change' }));
+    await screen.findByText('Dry-run result');
+    expect(calls[0].body.unlockAccount).toBe(true);
+  });
+
+  it('never sends unlock for an account that is not locked', async () => {
+    const u = userEvent.setup();
+    render(<PasswordResetPanel user={user} onChanged={() => {}} />);
+    const dialog = await fillAndOpenDialog(u);
+    await u.type(within(dialog).getByLabelText(/Justification/), 'Verified by phone, ticket approved');
+    await u.type(within(dialog).getByLabelText(/Type dave to confirm/), 'dave');
+    await u.click(within(dialog).getByRole('button', { name: 'Review change' }));
+    await screen.findByText('Dry-run result');
+    expect(calls[0].body.unlockAccount).toBe(false);
+  });
+});
+
 describe('password generator', () => {
   it('honours the length and includes every character class', () => {
     for (let i = 0; i < 50; i++) {

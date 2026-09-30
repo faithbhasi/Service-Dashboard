@@ -281,6 +281,28 @@ public class ChangeProcessTests
     // ---------------------------------------------------------------- password reset
 
     [Fact]
+    public async Task Resetting_a_password_cannot_be_used_to_unlock_without_the_unlock_permission()
+    {
+        using var app = new TestApp();
+        var admin = await app.NewClient().SignInAsync("dev.admin");
+        var created = await admin.Post("/api/admin/roles", new { name = "Reset only", permissions = new[] { Permissions.AdUsersRead, Permissions.AdUsersResetPassword } });
+        var roleId = (await admin.Json(created)).GetProperty("id").GetGuid();
+        await admin.Put($"/api/admin/users/{app.UserId("dev.user")}/roles", new { roleIds = new[] { roleId } });
+        var c = await app.NewClient().SignInAsync("dev.user");
+        var dave = UserGuid("dave.locked");
+
+        var unlockToo = await c.Post(Url(dave, "reset-password"), Body(new Dictionary<string, object?> { ["newPassword"] = "Zq7!Vault-Unique-Secret-9", ["unlockAccount"] = true }, typed: "dave.locked"));
+        Assert.Equal(HttpStatusCode.Forbidden, unlockToo.StatusCode);
+        Assert.Contains("unlock permission", await unlockToo.Content.ReadAsStringAsync());
+        Assert.True((await UserOf(c, "dave.locked")).GetProperty("lockedOut").GetBoolean()); // nothing changed
+
+        // The same person can still reset the password on its own.
+        var resetOnly = await c.Post(Url(dave, "reset-password"), Body(new Dictionary<string, object?> { ["newPassword"] = "Zq7!Vault-Unique-Secret-9", ["unlockAccount"] = false }, typed: "dave.locked"));
+        Assert.Equal(HttpStatusCode.OK, resetOnly.StatusCode);
+        Assert.True((await UserOf(c, "dave.locked")).GetProperty("lockedOut").GetBoolean());
+    }
+
+    [Fact]
     public async Task Password_reset_works_and_the_password_never_appears_in_logs_audit_or_responses()
     {
         using var app = new TestApp();

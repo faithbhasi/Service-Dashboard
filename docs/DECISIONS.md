@@ -162,10 +162,12 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 
 ## Known limitations
 
-* **The LDAP provider was not run against a real domain controller** (none is available in the build environment). It compiles, its
-  filters, escaping, status logic and error mapping are unit tested, and the Fake provider follows the same contract, but paging (VLV),
-  effective-rights reads, `unicodePwd`, `ModifyDN` and the delegated rights in `AD-DELEGATION.md` need to be verified in a test OU before
-  go-live (use "Validate only", which exercises the read side without changing anything).
+* **The LDAP provider has not been run against Microsoft Active Directory.** During development it was exercised end to end against an
+  AD-compatible test directory (LDAPS bind, search, sort + VLV paging, computed lockout/expiry attributes, nested and primary groups,
+  group member search, `unicodePwd` reset, enable/disable, unlock, `ModifyDN` moves, membership changes and the dry run reading
+  `allowedAttributesEffective` / `allowedChildClassesEffective`). Microsoft AD can still differ (AdminSDHolder/SDProp, fine-grained
+  password policy objects, some constructed attributes), so verify the delegated rights in `AD-DELEGATION.md` in a test OU of a Microsoft
+  test domain, using "Validate only", before go-live.
 * Nothing was tested against a real Okta org; the OIDC handler configuration follows the standard pattern and `OKTA-SETUP.md`.
 * Not tested on Windows/IIS (built and tested on Linux). `dotnet publish` output was inspected and contains `web.config` (in-process hosting).
 * Idle-timeout behaviour is unit tested through the cookie validator; there is no browser test that waits out a real timeout.
