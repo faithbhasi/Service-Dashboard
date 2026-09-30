@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ApiError, post } from '../Services/api';
 import { useShell } from '../Hooks/ShellContext';
-import { Field, Modal, Note, Spinner, Tag } from './ui';
+import { CopyButton, Field, Modal, Note, RequiredMark, Spinner, Tag } from './ui';
 
 export interface DirectoryChange { field: string; from: string | null; to: string | null }
 export interface DryRunCheck { name: string; passed: boolean; detail: string | null }
@@ -124,16 +124,20 @@ export function ChangeDialog({ title, policyKey, path, target, typedExpected, wa
         <>
           <p><strong>Target:</strong> {target}</p>
           {warning && <Note kind="warning">{warning}</Note>}
-          <Field label={`Justification${policy?.justificationRequired ? ` (at least ${minJust} characters)` : ' (optional)'}`} htmlFor="cd-just">
-            <textarea id="cd-just" rows={3} value={justification} onChange={(e) => setJustification(e.target.value)} maxLength={2000} />
+          {(policy?.justificationRequired || policy?.ticketRequired || (policy?.typedConfirmationRequired && !validateOnly)) && (
+            <p className="muted small">Fields marked <RequiredMark /> are required.</p>
+          )}
+          <Field label={`Justification${policy?.justificationRequired ? ` (at least ${minJust} characters)` : ' (optional)'}`} htmlFor="cd-just" required={!!policy?.justificationRequired}>
+            <textarea id="cd-just" rows={3} value={justification} onChange={(e) => setJustification(e.target.value)} maxLength={2000} aria-required={!!policy?.justificationRequired} />
           </Field>
-          <Field label={`Ticket number${policy?.ticketRequired ? ' (required)' : ' (optional)'}`} htmlFor="cd-ticket"
+          <Field label={`Ticket number${policy?.ticketRequired ? ' (required)' : ' (optional)'}`} htmlFor="cd-ticket" required={!!policy?.ticketRequired}
             hint={policy?.ticketPattern ? `Format: ${policy.ticketPattern}` : undefined}>
-            <input id="cd-ticket" value={ticket} onChange={(e) => setTicket(e.target.value)} maxLength={100} />
+            <input id="cd-ticket" value={ticket} onChange={(e) => setTicket(e.target.value)} maxLength={100} aria-required={!!policy?.ticketRequired} />
           </Field>
           {policy?.typedConfirmationRequired && !validateOnly && (
-            <Field label={`Type ${typedExpected} to confirm`} htmlFor="cd-typed">
-              <input id="cd-typed" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+            <Field label={`Type ${typedExpected} to confirm`} htmlFor="cd-typed" required
+              labelExtra={<CopyButton value={typedExpected} label={`Copy ${typedExpected}`} iconOnly />}>
+              <input id="cd-typed" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" aria-required="true" />
             </Field>
           )}
           {error && <Note kind="error">{error}</Note>}

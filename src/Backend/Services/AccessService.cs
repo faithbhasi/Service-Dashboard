@@ -7,7 +7,7 @@ namespace ServiceDashboard.Services;
 
 public sealed record RoleRef(Guid Id, string Name, string Source);
 
-public sealed record ResolvedAccess(IReadOnlyList<RoleRef> Roles, IReadOnlySet<string> Permissions);
+public sealed record ResolvedAccess(IReadOnlyList<RoleRef> Roles, IReadOnlySet<string> Permissions, AdScope AdScope);
 
 /// <summary>Works out which roles (direct assignment or Okta group mapping) and permissions a user has.</summary>
 public sealed class AccessService(AppDbContext db)
@@ -36,9 +36,41 @@ public sealed class AccessService(AppDbContext db)
 
             var perms = refs.Values.SelectMany(rr => roles[rr.Id].Permissions.Select(p => p.Permission))
                 .Where(Permissions.AllIds.Contains).ToHashSet(StringComparer.Ordinal);
-            result[u.Id] = new ResolvedAccess(refs.Values.OrderBy(r => r.Name).ToList(), perms);
+            result[u.Id] = new ResolvedAccess(refs.Values.OrderBy(r => r.Name).ToList(), perms, EffectiveScope(refs.Keys.Select(id => roles[id])));
         }
         return result;
+    }
+
+    public static readonly string[] UserChangePermissions =
+    [
+        Permissions.AdUsersResetPassword, Permissions.AdUsersUnlock, Permissions.AdUsersEnable, Permissions.AdUsersDisable,
+        Permissions.AdUsersMove, Permissions.AdUsersGroupsAdd, Permissions.AdUsersGroupsRemove,
+    ];
+    public static readonly string[] ComputerChangePermissions = [Permissions.AdComputersEnable, Permissions.AdComputersDisable, Permissions.AdComputersMove];
+    public static readonly string[] GroupChangePermissions = [Permissions.AdUsersGroupsAdd, Permissions.AdUsersGroupsRemove];
+
+    /// <summary>
+    /// What all of a person's roles together may manage. Only roles that can change that kind of object count (a read-only role must not
+    /// widen a helpdesk role), the Admins role is never limited, and a role with no limit makes the result unlimited for that kind.
+    /// </summary>
+    public static AdScope EffectiveScope(IEnumerable<Role> roles)
+    {
+        var all = roles.Select(r => (Role: r, Scope: AdScope.Parse(r.AdScopeJson), Perms: r.Permissions.Select(p => p.Permission).ToHashSet())).ToList();
+
+        List<string>? Combine(string[] relevant, Func<AdScope, List<string>?> pick)
+        {
+            var counted = all.Where(x => x.Perms.Overlaps(relevant)).ToList();
+            if (counted.Count == 0) return null; // nothing to limit: they cannot change this kind of object anyway
+            if (counted.Any(x => x.Role.Id == DefaultRoles.AdminsId || pick(x.Scope) == null)) return null;
+            return counted.SelectMany(x => pick(x.Scope)!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        return new AdScope
+        {
+            UserOus = Combine(UserChangePermissions, s => s.UserOus),
+            ComputerOus = Combine(ComputerChangePermissions, s => s.ComputerOus),
+            Groups = Combine(GroupChangePermissions, s => s.Groups),
+        };
     }
 
     public static HashSet<string> ParseGroups(string json)

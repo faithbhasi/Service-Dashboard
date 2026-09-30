@@ -68,8 +68,8 @@ public class ChangeProcessTests
         Assert.False((await UserOf(c, "dave.locked")).GetProperty("lockedOut").GetBoolean());
 
         var rows = app.Db(db => db.AuditLogs.Where(a => a.Action == "ad.user.unlock").OrderBy(a => a.Id).ToList());
-        Assert.Equal([AuditResult.Validated, AuditResult.Success], rows.Select(r => r.Result));
-        var done = rows[1];
+        Assert.Equal([AuditResult.Success], rows.Select(r => r.Result)); // one row for the change: no extra automatic "Validated" row
+        var done = rows[0];
         Assert.Equal(Why, done.Justification);
         Assert.Equal("INC-1234", done.TicketNumber);
         Assert.Equal(dave.ToString(), done.TargetId);
@@ -276,6 +276,19 @@ public class ChangeProcessTests
         Assert.Equal("Success", rem.GetProperty("results")[0].GetProperty("status").GetString());
         var primary = await c.Json(await c.Post(Url(alice, "groups/remove"), Body(With("groupIds", new[] { GroupGuid("Domain Users") }))));
         Assert.Equal("Denied", primary.GetProperty("results")[0].GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task A_change_made_after_a_review_leaves_one_validation_row_and_one_result_row()
+    {
+        using var app = new TestApp();
+        var c = await app.NewClient().SignInAsync("dev.helpdesk");
+        var dave = UserGuid("dave.locked");
+        // What the confirmation screen does: a dry run for the review step, then the real change.
+        Assert.Equal(HttpStatusCode.OK, (await c.Post(Url(dave, "unlock"), Body(validateOnly: true))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await c.Post(Url(dave, "unlock"), Body())).StatusCode);
+        var rows = app.Db(db => db.AuditLogs.Where(a => a.Action == "ad.user.unlock").OrderBy(a => a.Id).ToList());
+        Assert.Equal([AuditResult.Validated, AuditResult.Success], rows.Select(r => r.Result)); // not two validations before the change
     }
 
     // ---------------------------------------------------------------- password reset

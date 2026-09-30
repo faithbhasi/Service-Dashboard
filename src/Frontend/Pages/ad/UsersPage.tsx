@@ -5,7 +5,7 @@ import { PageGuard } from '../../Components/PageGuard';
 import { DataTable, ErrorNote, PageHeader, Pagination, type Column } from '../../Components/ui';
 import { useAsync } from '../../Hooks/useAsync';
 import { useDrawerRoute } from '../../Hooks/useDrawerRoute';
-import { useListParams } from '../../Hooks/useListParams';
+import { useListParams, useTextParam } from '../../Hooks/useListParams';
 import { useTableColumns } from '../../Hooks/useTableColumns';
 import { get, qs } from '../../Services/api';
 import type { AdUser, UserPage } from '../../Services/adTypes';
@@ -13,12 +13,15 @@ import { Permissions } from '../../Services/permissions';
 import { UserDrawer } from './UserDrawer';
 
 const FILTERS: [string, string][] = [['All', 'All users'], ['Enabled', 'Enabled'], ['Disabled', 'Disabled'], ['Locked', 'Locked'], ['AccountExpired', 'Expired accounts']];
-const PAGE_SIZE = 25;
 
 export function UsersPage() {
   const list = useListParams();
   const drawer = useDrawerRoute('/ad/users', '');
   const t = useAdText();
+  const [deptInput, setDeptInput] = useTextParam(list, 'department');
+  const [titleInput, setTitleInput] = useTextParam(list, 'title');
+  const department = list.param('department');
+  const title = list.param('title');
 
   const columns: Column<AdUser>[] = useMemo(() => [
     { key: 'displayName', header: 'Display name', render: (u) => <strong>{u.displayName ?? u.samAccountName}</strong> },
@@ -40,8 +43,8 @@ export function UsersPage() {
     ['displayName', 'username', 'email', 'department', 'enabled', 'locked', 'lastLogon', 'ou']);
 
   const users = useAsync(
-    () => get<UserPage>('/modules/ad/users' + qs({ q: list.q, filter: list.filter, page: list.page, pageSize: PAGE_SIZE })),
-    [list.q, list.filter, list.page]);
+    () => get<UserPage>('/modules/ad/users' + qs({ q: list.q, filter: list.filter, department, title, page: list.page, pageSize: list.pageSize })),
+    [list.q, list.filter, department, title, list.page, list.pageSize]);
 
   return (
     <PageGuard page="ad.users" requires={[Permissions.AdUsersRead]}>
@@ -52,6 +55,11 @@ export function UsersPage() {
         <select value={list.filter} onChange={(e) => list.setFilter(e.target.value)} aria-label="Filter users">
           {FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
+        <input type="search" placeholder="Department" value={deptInput} onChange={(e) => setDeptInput(e.target.value)} aria-label="Filter by department" style={{ minWidth: 160 }} />
+        <input type="search" placeholder="Job title" value={titleInput} onChange={(e) => setTitleInput(e.target.value)} aria-label="Filter by job title" style={{ minWidth: 160 }} />
+        {(department || title) && (
+          <button className="btn btn-sm" onClick={() => { setDeptInput(''); setTitleInput(''); list.setParams({ department: '', title: '' }); }}>Clear filters</button>
+        )}
         <span className="grow" />
         <ColumnPicker columns={columns} visible={visible} onToggle={toggle} />
       </div>
@@ -60,7 +68,7 @@ export function UsersPage() {
         columns={columns.filter((c) => visible.includes(c.key))} onRowClick={(u) => drawer.open(u.id)}
         empty="No users match your search." />
       {users.data && (
-        <Pagination page={list.page} pageSize={PAGE_SIZE} total={users.data.total} capped={users.data.totalIsCapped} onPage={list.setPage} />
+        <Pagination page={list.page} pageSize={list.pageSize} onPageSize={list.setPageSize} total={users.data.total} capped={users.data.totalIsCapped} onPage={list.setPage} />
       )}
       {drawer.id && <UserDrawer id={drawer.id} tab={drawer.tab} onTab={drawer.setTab} onClose={drawer.close} onChanged={users.reload} />}
     </PageGuard>

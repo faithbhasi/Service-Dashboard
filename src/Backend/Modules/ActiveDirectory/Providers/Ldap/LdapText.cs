@@ -78,7 +78,7 @@ public static class LdapFilters
     public const string InChain = "1.2.840.113556.1.4.1941";
     public const string BitAnd = "1.2.840.113556.1.4.803";
 
-    public static string Users(string? text, UserFilter filter, string employeeIdAttribute, DateTime nowUtc)
+    public static string Users(string? text, UserFilter filter, string employeeIdAttribute, DateTime nowUtc, string? department = null, string? title = null)
     {
         var parts = new List<string> { UserBase };
         var t = LdapText.EscapeFilterValue(text?.Trim());
@@ -87,6 +87,10 @@ public static class LdapFilters
             var emp = LdapText.IsSafeAttributeName(employeeIdAttribute) ? employeeIdAttribute : "employeeID";
             parts.Add($"(|(sAMAccountName=*{t}*)(userPrincipalName=*{t}*)(displayName=*{t}*)(givenName=*{t}*)(sn=*{t}*)(mail=*{t}*)({emp}=*{t}*))");
         }
+        var dept = LdapText.EscapeFilterValue(department?.Trim());
+        if (dept.Length > 0) parts.Add($"(department=*{dept}*)");
+        var ttl = LdapText.EscapeFilterValue(title?.Trim());
+        if (ttl.Length > 0) parts.Add($"(title=*{ttl}*)");
         switch (filter)
         {
             case UserFilter.Disabled: parts.Add($"(userAccountControl:{BitAnd}:=2)"); break;
@@ -97,11 +101,13 @@ public static class LdapFilters
         return "(&" + string.Concat(parts) + ")";
     }
 
-    public static string Computers(string? text, ComputerFilter filter)
+    public static string Computers(string? text, ComputerFilter filter, string? osType = null)
     {
         var parts = new List<string> { ComputerBase };
         var t = LdapText.EscapeFilterValue(text?.Trim());
         if (t.Length > 0) parts.Add($"(|(cn=*{t}*)(dNSHostName=*{t}*))");
+        if (ComputerOsTypes.Match(osType) is { } os)
+            parts.Add("(|" + string.Concat(os.Select(o => $"(operatingSystem=*{LdapText.EscapeFilterValue(o)}*)")) + ")");
         if (filter == ComputerFilter.Disabled) parts.Add($"(userAccountControl:{BitAnd}:=2)");
         if (filter == ComputerFilter.Enabled) parts.Add($"(!(userAccountControl:{BitAnd}:=2))");
         return "(&" + string.Concat(parts) + ")";

@@ -297,7 +297,7 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
 
     public Task<PagedResult<DirectoryUser>> SearchUsersAsync(UserSearch s, CancellationToken ct = default) => Run(c =>
     {
-        var filter = LdapFilters.Users(s.Text, s.Filter, s.Options.EmployeeIdAttribute, DateTime.UtcNow);
+        var filter = LdapFilters.Users(s.Text, s.Filter, s.Options.EmployeeIdAttribute, DateTime.UtcNow, s.Department, s.Title);
         var attrs = UserAttrs(s.Options);
         // A lockoutTime alone does not prove the account is still locked, so confirm with the computed bit.
         Func<SearchResultEntry, bool>? post = s.Filter == UserFilter.Locked ? e => UserStatus.IsLockedOut(I(e, "msDS-User-Account-Control-Computed")) : null;
@@ -314,7 +314,7 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
 
     public Task<PagedResult<DirectoryComputer>> SearchComputersAsync(ComputerSearch s, CancellationToken ct = default) => Run(c =>
     {
-        var (items, total, capped) = SearchPage(c, SearchRoot(s.OuDn), LdapFilters.Computers(s.Text, s.Filter), ComputerAttrs(s.Options), s.Page, s.PageSize, s.Limit);
+        var (items, total, capped) = SearchPage(c, SearchRoot(s.OuDn), LdapFilters.Computers(s.Text, s.Filter, s.OsType), ComputerAttrs(s.Options), s.Page, s.PageSize, s.Limit);
         return new PagedResult<DirectoryComputer>
         {
             Items = items.Select(e => MapComputer(c, e, s.Options, resolveManagedBy: false)).ToList(),
@@ -432,6 +432,15 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
     public Task<DirectoryOu?> GetOuAsync(string dn, CancellationToken ct = default) => Run(c =>
         ReadByDn(c, dn, ["ou", "objectClass"]) is { } e && Values(e, "objectClass").Contains("organizationalUnit", StringComparer.OrdinalIgnoreCase)
             ? new DirectoryOu(e.DistinguishedName, S(e, "ou") ?? "", true) : null, ct);
+
+    public Task<IReadOnlyList<DateTime>> LockoutTimesAsync(DateTime sinceUtc, int max, CancellationToken ct = default) => Run(c =>
+    {
+        // lockoutTime is a FILETIME; 0 means "not locked". Only the time is read, nothing else about the account.
+        var filter = $"(&{LdapFilters.UserBase}(lockoutTime>={sinceUtc.ToFileTimeUtc()}))";
+        var entries = Scan(c, BaseDn, filter, ["lockoutTime"], Math.Clamp(max, 1, 5000));
+        IReadOnlyList<DateTime> times = entries.Select(e => L(e, "lockoutTime")).Where(t => t > 0).Select(DateTime.FromFileTimeUtc).ToList();
+        return times;
+    }, ct);
 
     public Task<long> CountUsersAsync(UserFilter filter, CancellationToken ct = default) => Run(c =>
         Count(c, BaseDn, LdapFilters.Users(null, filter, "employeeID", DateTime.UtcNow), ["msDS-User-Account-Control-Computed"],

@@ -69,7 +69,7 @@ domain and you are running as an account that may read AD you can leave both out
    * add your test users OU under *Manageable OUs - users* (use **Browse OUs**), the computers OU under *computers*,
    * search for your test groups under *Manageable groups* and add them,
    * Save.
-4. Open **Active Directory > Users**, search for a test user and open it. Try **Validate only** on the Account Actions tab (Password reset, Unlock, Enable/Disable), Groups and Move OU:
+4. Open **Active Directory > Users**, search for a test user and open it. Try **Validate** on the Account Actions tab (Password reset, Unlock, Enable/Disable), Groups and Move OU:
    it reads `allowedAttributesEffective` from AD and names any delegated right that is missing, without changing anything.
 5. Then do one real change on a test account and look at **Activity and Logs > Admin Actions**.
 

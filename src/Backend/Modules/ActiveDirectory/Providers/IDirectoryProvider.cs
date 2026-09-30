@@ -25,8 +25,24 @@ public sealed class PagedResult<T>
     public bool TotalIsCapped { get; init; }
 }
 
-public sealed record UserSearch(string? Text, UserFilter Filter, int Page, int PageSize, string? OuDn, int Limit, DirectoryReadOptions Options);
-public sealed record ComputerSearch(string? Text, ComputerFilter Filter, int Page, int PageSize, string? OuDn, int Limit, DirectoryReadOptions Options);
+public sealed record UserSearch(string? Text, UserFilter Filter, int Page, int PageSize, string? OuDn, int Limit, DirectoryReadOptions Options, string? Department = null, string? Title = null);
+public sealed record ComputerSearch(string? Text, ComputerFilter Filter, int Page, int PageSize, string? OuDn, int Limit, DirectoryReadOptions Options, string? OsType = null);
+
+/// <summary>The operating-system families offered in the Computers filter, and the text each one matches in operatingSystem.</summary>
+public static class ComputerOsTypes
+{
+    public static readonly IReadOnlyDictionary<string, string[]> All = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["windows11"] = ["Windows 11"],
+        ["windows10"] = ["Windows 10"],
+        ["windowsserver"] = ["Windows Server"],
+        ["macos"] = ["macOS", "Mac OS"],
+        ["linux"] = ["Linux", "Ubuntu", "Red Hat", "CentOS", "Debian"],
+    };
+
+    /// <summary>The substrings for a known key, or null when the key is empty or not one of the offered families.</summary>
+    public static string[]? Match(string? key) => !string.IsNullOrWhiteSpace(key) && All.TryGetValue(key.Trim(), out var m) ? m : null;
+}
 public sealed record GroupSearch(string? Text, int Page, int PageSize, int Limit);
 public sealed record MemberSearch(string? Text, MemberKind? Kind, int Page, int PageSize);
 
@@ -210,6 +226,8 @@ public interface IDirectoryProvider
     Task<IReadOnlyList<DirectoryOu>> BrowseOusAsync(string? parentDn, CancellationToken ct = default);
     Task<IReadOnlyList<DirectoryOu>> SearchOusAsync(string text, int limit, CancellationToken ct = default);
     Task<DirectoryOu?> GetOuAsync(string dn, CancellationToken ct = default);
+    /// <summary>When accounts last locked out, for accounts whose lockout time is at or after <paramref name="sinceUtc"/> (used for the hourly chart).</summary>
+    Task<IReadOnlyList<DateTime>> LockoutTimesAsync(DateTime sinceUtc, int max, CancellationToken ct = default);
     Task<long> CountUsersAsync(UserFilter filter, CancellationToken ct = default);
     Task<long> CountComputersAsync(ComputerFilter filter, CancellationToken ct = default);
 

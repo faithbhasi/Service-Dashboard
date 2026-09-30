@@ -23,6 +23,8 @@ internal sealed class FakeUser
     public string Ou { get; set; } = "";
     public int Uac { get; set; } = UserStatus.NormalAccount;
     public bool LockedOut { get; set; }
+    /// <summary>When the account locked out (shown in the hourly chart); cleared by an unlock.</summary>
+    public DateTime? LockedAt { get; set; }
     public long AccountExpires { get; init; }
     public long PwdLastSet { get; set; }
     public string? Pso { get; init; }
@@ -133,6 +135,7 @@ internal sealed class FakeDirectoryData
                 Manager = G<Guid?>("mgr"), Ou = ou,
                 Uac = UserStatus.NormalAccount | G<int>("uac"),
                 LockedOut = G<bool>("locked"),
+                LockedAt = G<bool>("locked") ? now.AddMinutes(-(20 + sam.Sum(ch => (int)ch) % 1300)) : null,
                 AccountExpires = o.TryGetValue("expires", out var ex) ? (long)ex! : 0,
                 PwdLastSet = o.TryGetValue("pwdset", out var ps) ? (long)ps! : Ft(now.AddDays(-20)),
                 Pso = G<string>("pso"), PsoMaxAgeDays = G<int>("psoAge"),

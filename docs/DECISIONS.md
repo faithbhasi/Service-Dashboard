@@ -76,15 +76,43 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
   assignment whether or not the Okta group currently has members.
 * A role cannot be deleted while assigned or mapped. Default roles cannot be deleted; only Admins is locked against editing.
 * Access-management denials are audited too.
+* **What a role may manage in Active Directory** (Users and Groups > Roles > edit a role > "What this role can manage in Active Directory"):
+  a role can be limited to some of the manageable **user OUs**, **computer OUs** and **groups** by ticking boxes. The lists to choose from are the
+  manageable OUs and groups in Settings > AD Integration, which stay the ceiling (protected objects and the allowlists always apply too), so a role
+  can only narrow what is allowed there. "No limit" (the default, and how every existing role behaves) adds nothing; an empty list means nothing.
+  * Enforcement is on the server in the same change pipeline as everything else (a role-scope denial is audited as Denied with the reason), and
+    the screens follow it: the Move/Add controls, `ouManageable` and a group's `isManageable` already reflect the signed-in person's roles.
+  * A person with several roles can manage what **any** of the roles that can change that kind of object allows. A read-only role (for example
+    Auditors) does not widen a helpdesk role, and the Admins role is never limited.
+  * Nobody can widen a scope beyond their own reach: to give a role a user OU, computer OU or group you must be able to manage it yourself, and
+    a person who cannot change that kind of object at all can keep or narrow a role's scope but not widen it. A role broader than yours cannot be
+    assigned to someone else or mapped to an Okta group. Cloning keeps the scope. Changes are audited with the new scope in the row.
 
 ## 6. How AD changes work (specification 12)
 
 * **One pipeline** (`AdChangeService`): permission, input checks from Action Policies, fresh re-read, allowlist/protected checks,
   dry run, change, audit, result with the correlation ID. Group add/remove runs the full pipeline **once per group** so each is validated,
   audited and reported separately.
-* **Dry runs are always recorded** as "Validated (no change made)": the confirmation preview, an explicit "Validate only", and the
-  automatic dry run inside a real change. A single change therefore leaves up to three audit rows (preview, automatic validation, result).
-* "Validate only" needs the action's own permission. In the UI the button is shown to people with `settings.manage` (the spec says
+* **Group membership can also be changed from a group** (Groups > open a group). It is the same pipeline, run once per *user*, with the
+  same permissions (`ad.users.groups.add` / `ad.users.groups.remove`), the same manageable-groups allowlist and protected-group rules, and one
+  audit row per user (so it also appears in that user's activity history). When the Action Policy asks for a typed confirmation, the
+  confirmation from a group is the group's name. Up to 50 users per request; only users, not computers or nested groups, can be removed there.
+* **Resetting a password with "also unlock"** needs the unlock permission as well as the reset permission (checked on the server, not just hidden
+  in the screen). The "Unlock account" button is always available, because the lockout state shown can lag the domain controller; the
+  server re-reads it and reports "no change" if the account is no longer locked.
+* **Generated password length** is one global setting (Settings > Action Policies, 8 to 128), not chosen per reset.
+* **Hourly chart on Home**: password resets and unlocks are counted from this application's audit log; lockouts come from the `lockoutTime`
+  Active Directory keeps on each account (read through LDAP, capped at 5000). AD does not keep a history of lockouts, so an account that
+  was locked and already unlocked may not be counted, and the chart can never show lockouts from before the account's last lockout.
+* **Lists** (Users, Computers, Groups, group members, App Users, Activity and Logs) have a Rows per page choice of 25, 50 or 100 at the bottom
+  right; on the AD lists it is kept in the address (`pageSize`).
+* **User and computer filters**: department and job title are "contains" filters on the `department` and `title` attributes; the operating
+  system filter offers fixed families (Windows 11, Windows 10, Windows Server, macOS, Linux) matched on `operatingSystem`. All values are
+  escaped like the search text. There are no drop-down lists of existing departments or titles because AD cannot list distinct values cheaply.
+* **Dry runs that were asked for are recorded once** as "Validated (no change made)": the confirmation screen's review step and the Validate
+  button. The automatic dry run inside a real change is **not** written as a second row (it used to be, which produced two "Validated" rows
+  before every change). A change made from the screen therefore leaves two audit rows: the review (Validated) and the result.
+* "Validate" (a dry run that changes nothing) needs the action's own permission. In the UI the button is shown to people with `settings.manage` (the spec says
   "admins"); the confirmation dialog uses the same dry run to show its preview to everyone who may make the change.
 * HTTP mapping of the result body (a `ChangeResult` in every case): success, no-change and validated = 200; denied = 403; failed
   (including a failed dry run) = 422; missing justification/ticket/typed confirmation = 400; directory unreachable = 503.
@@ -162,12 +190,16 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 
 ## Known limitations
 
+* The LDAP query behind the hourly lockout chart (`lockoutTime>=...`) and the department, title and operating-system filters are covered by
+  filter-building tests and the Fake provider, but have not been run against a real Microsoft Active Directory. Check them with your test
+  domain first (Home > Activity by hour, and the filters on Users and Computers).
+
 * **The LDAP provider has not been run against Microsoft Active Directory.** During development it was exercised end to end against an
   AD-compatible test directory (LDAPS bind, search, sort + VLV paging, computed lockout/expiry attributes, nested and primary groups,
   group member search, `unicodePwd` reset, enable/disable, unlock, `ModifyDN` moves, membership changes and the dry run reading
   `allowedAttributesEffective` / `allowedChildClassesEffective`). Microsoft AD can still differ (AdminSDHolder/SDProp, fine-grained
   password policy objects, some constructed attributes), so verify the delegated rights in `AD-DELEGATION.md` in a test OU of a Microsoft
-  test domain, using "Validate only", before go-live.
+  test domain, using "Validate", before go-live.
 * Nothing was tested against a real Okta org; the OIDC handler configuration follows the standard pattern and `OKTA-SETUP.md`.
 * Not tested on Windows/IIS (built and tested on Linux). `dotnet publish` output was inspected and contains `web.config` (in-process hosting).
 * Idle-timeout behaviour is unit tested through the cookie validator; there is no browser test that waits out a real timeout.

@@ -15,8 +15,9 @@ public sealed class AdComputersController(AdDirectoryService ad, AdChangeService
 {
     [HttpGet, Authorize(Policy = Permissions.AdComputersRead), EnableRateLimiting(RateLimitPolicies.Search)]
     public async Task<IActionResult> Search([FromQuery] string? q, [FromQuery] ComputerFilter filter = ComputerFilter.All,
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? ou = null, CancellationToken ct = default) =>
-        Ok(await ad.SearchComputersAsync(q, filter, page, pageSize, ou, ct));
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? ou = null,
+        [FromQuery] string? os = null, CancellationToken ct = default) =>
+        Ok(await ad.SearchComputersAsync(q, filter, page, pageSize, ou, ct, os));
 
     [HttpGet("{id:guid}"), Authorize(Policy = Permissions.AdComputersRead)]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

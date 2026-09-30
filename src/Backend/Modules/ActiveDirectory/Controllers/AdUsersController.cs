@@ -15,8 +15,9 @@ public sealed class AdUsersController(AdDirectoryService ad, AdChangeService cha
 {
     [HttpGet, Authorize(Policy = Permissions.AdUsersRead), EnableRateLimiting(RateLimitPolicies.Search)]
     public async Task<IActionResult> Search([FromQuery] string? q, [FromQuery] UserFilter filter = UserFilter.All,
-        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? ou = null, CancellationToken ct = default) =>
-        Ok(await ad.SearchUsersAsync(q, filter, page, pageSize, ou, ct));
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25, [FromQuery] string? ou = null,
+        [FromQuery] string? department = null, [FromQuery] string? title = null, CancellationToken ct = default) =>
+        Ok(await ad.SearchUsersAsync(q, filter, page, pageSize, ou, ct, department, title));
 
     [HttpGet("{id:guid}"), Authorize(Policy = Permissions.AdUsersRead)]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct) =>

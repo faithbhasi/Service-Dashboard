@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChangeDialog } from '../../Components/ChangeDialog';
+import { Icon } from '../../Components/Icon';
 import { Ou } from '../../Components/adUi';
 import { CopyButton, Card, ErrorNote, Note, Spinner, Tag } from '../../Components/ui';
 import { useAuth } from '../../Hooks/AuthContext';
@@ -11,13 +12,13 @@ import type { AdComputer, AdUser } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { OuPicker } from './OuPicker';
 
-/** Buttons for one action. "Validate only" is a troubleshooting aid for people who manage settings. */
-function Actions({ children, onValidate, disabled }: { children: ReactNode; onValidate: () => void; disabled?: boolean }) {
+/** Buttons for one action. "Validate" (a dry run that changes nothing) is a troubleshooting aid for people who manage settings. */
+export function Actions({ children, onValidate, disabled }: { children: ReactNode; onValidate: () => void; disabled?: boolean }) {
   const { can } = useAuth();
   return (
     <div className="form-actions">
       {children}
-      {can(Permissions.SettingsManage) && <button className="btn" onClick={onValidate} disabled={disabled}>Validate only</button>}
+      {can(Permissions.SettingsManage) && <button className="btn" onClick={onValidate} disabled={disabled} title="Check that the change would work, without making it">Validate</button>}
     </div>
   );
 }
@@ -26,17 +27,22 @@ type Mode = null | 'confirm' | 'validate';
 
 // ---------------------------------------------------------------------------------------------------- password
 
-export const MIN_GENERATED_LENGTH = 8;
-export const MAX_GENERATED_LENGTH = 128;
+/** An eye (password hidden, click to show) or crossed-out eye (password visible, click to hide) inside the field. */
+function EyeToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className="btn btn-ghost btn-icon eye" onClick={onToggle} aria-pressed={show}
+      aria-label={show ? 'Hide password' : 'Show password'} title={show ? 'Hide password' : 'Show password'}>
+      <Icon name={show ? 'eyeOff' : 'eye'} size={18} />
+    </button>
+  );
+}
 
 export function PasswordResetPanel({ user, onChanged }: { user: AdUser; onChanged: () => void }) {
   const { shell } = useShell();
   const { can } = useAuth();
   const [pw, setPw] = useState('');
-  // The generator's length starts at the Action Policies setting and can be adjusted for this one reset.
-  const [lenText, setLenText] = useState(String(shell?.actionPolicies.generatedPasswordLength ?? 16));
-  const len = Number(lenText);
-  const lenValid = Number.isInteger(len) && len >= MIN_GENERATED_LENGTH && len <= MAX_GENERATED_LENGTH;
+  // The generated length is one global setting (Settings > Action Policies), not chosen per reset.
+  const generatedLength = shell?.actionPolicies.generatedPasswordLength ?? 16;
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
   const [mustChange, setMustChange] = useState(shell?.actionPolicies.mustChangePasswordDefault ?? true);
@@ -62,31 +68,27 @@ export function PasswordResetPanel({ user, onChanged }: { user: AdUser; onChange
       <div className="form-grid">
         <div className="field">
           <label htmlFor="pw-new">New password</label>
-          <input id="pw-new" type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" spellCheck={false} />
+          <div className="input-eye">
+            <input id="pw-new" type={show ? 'text' : 'password'} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" spellCheck={false} />
+            <EyeToggle show={show} onToggle={() => setShow((v) => !v)} />
+          </div>
         </div>
         <div className="field">
           <label htmlFor="pw-confirm">Confirm password</label>
-          <input id="pw-confirm" type={show ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" spellCheck={false} />
+          <div className="input-eye">
+            <input id="pw-confirm" type={show ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" spellCheck={false} />
+            <EyeToggle show={show} onToggle={() => setShow((v) => !v)} />
+          </div>
           {mismatch && <div className="field-error" role="alert">The passwords do not match.</div>}
         </div>
       </div>
       <div className="pwd-row">
-        <button className="btn btn-sm" type="button" onClick={() => setShow((s) => !s)}>{show ? 'Hide' : 'Show'}</button>
-        <button className="btn btn-sm" type="button" disabled={!lenValid} onClick={() => { const g = generatePassword(len); setPw(g); setConfirm(g); setShow(true); }}>
+        <button className="btn btn-sm" type="button" onClick={() => { const g = generatePassword(generatedLength); setPw(g); setConfirm(g); setShow(true); }}>
           Generate secure password
         </button>
-        <label className="pwd-length" htmlFor="pw-length">
-          <span>Characters</span>
-          <input id="pw-length" type="number" inputMode="numeric" min={MIN_GENERATED_LENGTH} max={MAX_GENERATED_LENGTH} value={lenText}
-            onChange={(e) => setLenText(e.target.value)} aria-invalid={!lenValid} aria-describedby="pw-length-help" />
-        </label>
-        {pw && <CopyButton value={pw} label="Copy password" />}
+        {pw && <CopyButton value={pw} label="Copy password" variant="button" />}
       </div>
-      <div id="pw-length-help" className={lenValid ? 'muted small' : 'field-error'} role={lenValid ? undefined : 'alert'}>
-        {lenValid
-          ? `Generated passwords use ${len} characters. The default is set under Settings > Action Policies.`
-          : `Enter a length from ${MIN_GENERATED_LENGTH} to ${MAX_GENERATED_LENGTH}.`}
-      </div>
+      <div className="muted small">Generated passwords are {generatedLength} characters long. Administrators set this under Settings &gt; Action Policies.</div>
       <div className="spacer" />
       <label className="check"><input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} /> User must change password at next sign-in</label>
       {canUnlock && (
@@ -118,12 +120,11 @@ export function UnlockPanel({ user, onChanged }: { user: AdUser; onChanged: () =
     <Card title="Unlock account">
       <p>Current state: {user.lockedOut ? <Tag kind="warning">Locked out</Tag> : <Tag kind="success">Not locked</Tag>}</p>
       <p className="muted small">
-        {user.lockedOut
-          ? 'The lockout state is checked again with the domain controller just before unlocking. If the account is no longer locked, nothing is changed.'
-          : 'This account is not locked out, so there is nothing to unlock. Use Refresh if it may have been locked since this panel opened.'}
+        Unlock is always available, because the lockout state shown here can be a little behind the domain controller.
+        It is checked again just before unlocking, and if the account is no longer locked nothing is changed.
       </p>
-      <Actions onValidate={() => setMode('validate')} disabled={!user.lockedOut}>
-        <button className="btn btn-primary" disabled={!user.lockedOut} onClick={() => setMode('confirm')}>Unlock account</button>
+      <Actions onValidate={() => setMode('validate')}>
+        <button className="btn btn-primary" onClick={() => setMode('confirm')}>Unlock account</button>
       </Actions>
       {mode && (
         <ChangeDialog title="Unlock account" policyKey="unlock" path={`/modules/ad/users/${user.id}/unlock`}

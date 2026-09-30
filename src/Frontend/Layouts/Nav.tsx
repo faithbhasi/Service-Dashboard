@@ -20,7 +20,7 @@ export function Nav({ collapsed }: { collapsed: boolean }) {
     { to: '/', label: 'Home', icon: 'home', requires: [] },
     { to: '/ad/users', label: 'Users', icon: 'users', requires: [Permissions.AdUsersRead], child: true, moduleId: 'ad' },
     { to: '/ad/computers', label: 'Computers', icon: 'computer', requires: [Permissions.AdComputersRead], child: true, moduleId: 'ad' },
-    { to: '/ad/groups', label: 'Groups', icon: 'group', requires: [Permissions.AdGroupsRead], child: true, tag: 'Read-Only', moduleId: 'ad' },
+    { to: '/ad/groups', label: 'Groups', icon: 'group', requires: [Permissions.AdGroupsRead], child: true, moduleId: 'ad' },
   ];
   const adVisible = items.filter((i) => i.moduleId === 'ad' && canAny(...i.requires));
 

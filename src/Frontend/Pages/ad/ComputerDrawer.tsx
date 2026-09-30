@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { EnabledTag, ObjectLink, Ou, Text, useAdText } from '../../Components/adUi';
-import { Card, Drawer, ErrorNote, KeyValue, Note, NotSet, Spinner, Tabs, type TabDef } from '../../Components/ui';
+import { EnabledTag, HeaderField, ObjectLink, Ou, Text, useAdText } from '../../Components/adUi';
+import { Card, CopyButton, Drawer, ErrorNote, KeyValue, Note, NotSet, RefreshButton, Spinner, Tabs, type TabDef } from '../../Components/ui';
 import { useAuth } from '../../Hooks/AuthContext';
 import { useShell } from '../../Hooks/ShellContext';
 import { useAsync } from '../../Hooks/useAsync';
@@ -35,11 +35,11 @@ export function ComputerDrawer({ id, tab, onTab, onClose, onChanged }: {
     <Drawer open onClose={onClose} wide header={
       detail.error ? <ErrorNote error={detail.error} /> : !c ? <Spinner /> : (
         <div className="summary">
-          <div className="summary-title"><h1>{c.name}</h1><EnabledTag enabled={c.enabled} /><button className="btn btn-sm" onClick={refresh}>Refresh</button></div>
-          <div className="summary-meta">
-            {c.dnsHostName && <span>{c.dnsHostName}</span>}
-            {c.operatingSystem && <span>{c.operatingSystem}</span>}
-            <span>OU: <Ou dn={c.ou} /></span>
+          <div className="summary-title"><h1>{c.name}</h1><CopyButton value={c.name} label="Copy computer name" iconOnly /><EnabledTag enabled={c.enabled} /><RefreshButton onRefresh={refresh} /></div>
+          <div className="summary-line">
+            <HeaderField label="Name">{c.dnsHostName ?? c.name} <CopyButton value={c.dnsHostName ?? c.name} label="Copy full computer name (FQDN)" iconOnly /></HeaderField>
+            <HeaderField label="OS">{c.operatingSystem ?? <NotSet />}</HeaderField>
+            <HeaderField label="OU" end><Ou dn={c.ou} /></HeaderField>
           </div>
         </div>
       )}>

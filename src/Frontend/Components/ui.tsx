@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError } from '../Services/api';
 import { Icon } from './Icon';
 
-export type TagKind = 'neutral' | 'success' | 'warning' | 'error' | 'info';
+export type TagKind = 'neutral' | 'success' | 'warning' | 'error' | 'info' | 'muted';
 
 export function Tag({ kind = 'neutral', children, title }: { kind?: TagKind; children: ReactNode; title?: string }) {
   return <span className={`tag tag-${kind}`} title={title}>{children}</span>;
@@ -57,14 +57,41 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
-export function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
+/** Shows the green tick for a moment after something was done. */
+function useTick(ms = 1500) {
   const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return { done, flash: () => { setDone(true); clearTimeout(timer.current); timer.current = setTimeout(() => setDone(false), ms); } };
+}
+
+/**
+ * Copies to the clipboard and shows a green tick. `iconOnly` gives a small round icon (with the label as its tooltip);
+ * `variant="button"` looks like the other small buttons, for places such as the password tools.
+ */
+export function CopyButton({ value, label = 'Copy', iconOnly = false, variant = 'ghost' }: {
+  value: string; label?: string; iconOnly?: boolean; variant?: 'ghost' | 'button';
+}) {
+  const { done, flash } = useTick();
   return (
-    <button type="button" className="btn btn-ghost btn-sm" aria-label={label} title={label}
+    <button type="button" className={`btn btn-sm ${variant === 'ghost' ? 'btn-ghost' : ''} ${iconOnly ? 'btn-icon' : ''} ${done ? 'is-done' : ''}`}
+      aria-label={label} title={label}
       onClick={async () => {
-        try { await navigator.clipboard.writeText(value); setDone(true); setTimeout(() => setDone(false), 1500); } catch { /* clipboard blocked */ }
+        try { await navigator.clipboard.writeText(value); flash(); } catch { /* clipboard blocked */ }
       }}>
-      <Icon name="copy" size={14} /> {done ? 'Copied' : label}
+      <Icon name={done ? 'check' : 'copy'} size={14} />{!iconOnly && <> {done ? 'Copied' : label}</>}
+      <span className="sr-only" role="status">{done ? 'Copied' : ''}</span>
+    </button>
+  );
+}
+
+/** A round icon button (refresh) that turns into a green tick for a moment once it has been pressed. */
+export function RefreshButton({ onRefresh, label = 'Refresh' }: { onRefresh: () => void; label?: string }) {
+  const { done, flash } = useTick();
+  return (
+    <button type="button" className={`btn btn-icon btn-round ${done ? 'is-done' : ''}`} aria-label={label} title={label}
+      onClick={() => { onRefresh(); flash(); }}>
+      <Icon name={done ? 'check' : 'refresh'} size={16} />
     </button>
   );
 }
@@ -128,8 +155,12 @@ export function Modal({ title, children, onClose, footer, busy = false }: {
   );
 }
 
-export function Pagination({ page, pageSize, total, capped, onPage }: {
+export const PAGE_SIZES = [25, 50, 100];
+
+export function Pagination({ page, pageSize, total, capped, onPage, onPageSize, pageSizes = PAGE_SIZES }: {
   page: number; pageSize: number; total: number; capped?: boolean; onPage: (p: number) => void;
+  /** When given, a "Rows per page" choice is shown at the right. */
+  onPageSize?: (n: number) => void; pageSizes?: number[];
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -137,7 +168,15 @@ export function Pagination({ page, pageSize, total, capped, onPage }: {
   return (
     <div className="pagination">
       <span className="muted">{from}-{to} of {total}{capped ? '+' : ''}</span>
-      <div className="row gap">
+      <div className="row gap wrap">
+        {onPageSize && (
+          <label className="row gap small">
+            <span className="muted">Rows per page</span>
+            <select value={pageSize} onChange={(e) => onPageSize(Number(e.target.value))} aria-label="Rows per page">
+              {(pageSizes.includes(pageSize) ? pageSizes : [...pageSizes, pageSize].sort((x, y) => x - y)).map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+        )}
         <button className="btn btn-sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>Previous</button>
         <span>Page {page} of {pages}</span>
         <button className="btn btn-sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>Next</button>
@@ -175,10 +214,19 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, loading, empty
   );
 }
 
-export function Field({ label, htmlFor, hint, error, children }: { label: string; htmlFor?: string; hint?: ReactNode; error?: string; children: ReactNode }) {
+/** A red asterisk that marks a field as required. It is decoration for the eye; the input itself carries aria-required. */
+export const RequiredMark = () => <span className="req" aria-hidden="true" title="Required"> *</span>;
+
+export function Field({ label, htmlFor, hint, error, children, required = false, labelExtra }: {
+  label: string; htmlFor?: string; hint?: ReactNode; error?: string; children: ReactNode;
+  required?: boolean; labelExtra?: ReactNode;
+}) {
   return (
     <div className="field">
-      <label htmlFor={htmlFor}>{label}</label>
+      <div className="field-label-row">
+        <label htmlFor={htmlFor}>{label}{required && <RequiredMark />}</label>
+        {labelExtra}
+      </div>
       {children}
       {hint && <div className="muted small">{hint}</div>}
       {error && <div className="field-error" role="alert">{error}</div>}

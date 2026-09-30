@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ConfirmModal } from '../Components/ConfirmModal';
+import { isLimited, noScope, RoleScopeEditor, type AdScope, type ScopeOptions } from '../Components/RoleScopeEditor';
 import { PageGuard } from '../Components/PageGuard';
 import { Card, DataTable, Drawer, ErrorNote, Field, Modal, Note, PageHeader, Pagination, Spinner, Tabs, Tag } from '../Components/ui';
 import { useAuth } from '../Hooks/AuthContext';
@@ -16,7 +17,7 @@ interface AppUser {
 }
 interface RoleDto {
   id: string; name: string; description: string | null; isSystem: boolean; isLocked: boolean;
-  permissions: string[]; userCount: number; mappingCount: number;
+  permissions: string[]; userCount: number; mappingCount: number; adScope?: AdScope;
 }
 interface PermissionDto { id: string; group: string; description: string; roles: string[] }
 interface Mapping { id: string; oktaGroup: string; roleId: string; roleName: string }
@@ -54,10 +55,11 @@ function AppUsersTab() {
   const [q, setQ] = useState('');
   const dq = useDebounced(q);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<AppUser>();
   const [exportError, setExportError] = useState<unknown>();
   useEffect(() => setPage(1), [dq]);
-  const users = useAsync(() => get<Paged<AppUser>>('/admin/users' + qs({ q: dq, page, pageSize: 25 })), [dq, page]);
+  const users = useAsync(() => get<Paged<AppUser>>('/admin/users' + qs({ q: dq, page, pageSize })), [dq, page, pageSize]);
 
   return (
     <>
@@ -76,7 +78,7 @@ function AppUsersTab() {
           { key: 'roles', header: 'Roles', render: (u) => u.roles.length ? u.roles.map((r) => <Tag key={r.id} kind="info">{r.name}</Tag>) : <span className="muted">None</span> },
           { key: 'perms', header: 'Permissions', className: 'right', render: (u) => u.permissions.length },
         ]} />
-      {users.data && <Pagination page={page} pageSize={25} total={users.data.total} onPage={setPage} />}
+      {users.data && <Pagination page={page} pageSize={pageSize} total={users.data.total} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />}
       {selected && (
         <UserDrawer user={selected} canEdit={can(Permissions.AdminUsersManage)} onClose={() => setSelected(undefined)}
           onChanged={() => { setSelected(undefined); users.reload(); }} />
@@ -215,7 +217,7 @@ function RolesTab() {
       <ErrorNote error={roles.error} />
       <DataTable rows={roles.data} loading={roles.loading} rowKey={(r) => r.id}
         columns={[
-          { key: 'n', header: 'Role', render: (r) => <><strong>{r.name}</strong> {r.isSystem && <Tag>Default</Tag>}<div className="muted small">{r.description}</div></> },
+          { key: 'n', header: 'Role', render: (r) => <><strong>{r.name}</strong> {r.isSystem && <Tag>Default</Tag>} {isLimited(r.adScope) && <Tag kind="info" title="This role can only manage some OUs or groups in Active Directory">Limited AD scope</Tag>}<div className="muted small">{r.description}</div></> },
           { key: 'p', header: 'Permissions', className: 'right', render: (r) => r.permissions.length },
           { key: 'u', header: 'Users', className: 'right', render: (r) => r.userCount },
           { key: 'm', header: 'Okta groups', className: 'right', render: (r) => r.mappingCount },
@@ -253,10 +255,12 @@ function RoleEditor({ state, permissions, onClose, onSaved }: {
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   const groups = useMemo(() => [...new Set(permissions.map((p) => p.group))], [permissions]);
+  const [scope, setScope] = useState<AdScope>(role?.adScope ?? noScope);
+  const scopeOptions = useAsync(() => get<ScopeOptions>('/admin/roles/ad-scope-options'), []);
 
   const save = async () => {
     setBusy(true); setError(undefined);
-    const body = { name, description, permissions: [...chosen] };
+    const body = { name, description, permissions: [...chosen], adScope: scope };
     try {
       if (mode === 'edit') await put(`/admin/roles/${role!.id}`, body);
       else if (mode === 'clone') await post(`/admin/roles/${role!.id}/clone`, { name });
@@ -295,6 +299,10 @@ function RoleEditor({ state, permissions, onClose, onSaved }: {
             ))}
           </div>
         ))}
+      {mode !== 'clone' && scopeOptions.data && (
+        <RoleScopeEditor value={scope} onChange={setScope} options={scopeOptions.data} readOnly={readOnly} />
+      )}
+      {mode === 'clone' && isLimited(role?.adScope) && <p className="muted">The clone also keeps this role's limits on what it can manage in Active Directory.</p>}
       <ErrorNote error={error} />
     </Modal>
   );

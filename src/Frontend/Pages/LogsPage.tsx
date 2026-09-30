@@ -11,7 +11,6 @@ import { startOfTodayIso, zonedTimeToUtcIso } from '../Services/format';
 import { Permissions } from '../Services/permissions';
 import type { Paged } from '../Services/types';
 
-const PAGE_SIZE = 25;
 const PRESETS: [string, string][] = [['', 'Any time'], ['today', 'Today'], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['custom', 'Custom range']];
 const RESULTS = ['', 'Success', 'Failure', 'Denied', 'Validated (no change made)'];
 type Tab = 'logons' | 'access' | 'admin' | 'user-activity';
@@ -133,8 +132,10 @@ function LogTab({ tab }: { tab: Tab }) {
   const users = useAsync(() => (allLogs ? get<{ id: string; displayName: string }[]>('/logs/users') : Promise.resolve([])), [allLogs]);
   const userId = tab === 'user-activity' ? (f.params.get('user') ?? f.apiParams.userId) : f.apiParams.userId;
   const query = { ...f.apiParams, userId };
-  const list = useAsync(() => get<Paged<LogRow>>(`/logs/${tab}` + qs({ ...query, page: f.page, pageSize: PAGE_SIZE })),
-    [tab, JSON.stringify(query), f.page]);
+  const askedSize = Number(f.params.get('pageSize'));
+  const pageSize = [25, 50, 100].includes(askedSize) ? askedSize : 25;
+  const list = useAsync(() => get<Paged<LogRow>>(`/logs/${tab}` + qs({ ...query, page: f.page, pageSize })),
+    [tab, JSON.stringify(query), f.page, pageSize]);
 
   const columns = useMemo((): Column<LogRow>[] => {
     const time: Column<LogRow> = { key: 'time', header: 'Time', className: 'nowrap', render: (r) => dateTime(r.timeUtc) };
@@ -172,7 +173,8 @@ function LogTab({ tab }: { tab: Tab }) {
       {(tab !== 'user-activity' || userId || !allLogs) && (
         <>
           <DataTable rows={list.data?.items} loading={list.loading} rowKey={(r) => String(r.id)} columns={columns} onRowClick={(r) => setOpen(r.id)} empty="No records match these filters." />
-          {list.data && <Pagination page={f.page} pageSize={PAGE_SIZE} total={list.data.total} onPage={(p) => f.set({ page: p <= 1 ? '' : String(p) })} />}
+          {list.data && <Pagination page={f.page} pageSize={pageSize} total={list.data.total} onPage={(p) => f.set({ page: p <= 1 ? '' : String(p) })}
+            onPageSize={(n) => f.set({ pageSize: n === 25 ? '' : String(n) })} />}
         </>
       )}
       {open !== null && <LogDetail id={open} onClose={() => setOpen(null)} />}

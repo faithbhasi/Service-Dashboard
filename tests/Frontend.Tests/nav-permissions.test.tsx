@@ -34,7 +34,7 @@ describe('navigation is driven by permissions', () => {
     renderNav();
     expect(screen.getByRole('link', { name: /Users/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Groups/ })).toBeInTheDocument();
-    expect(screen.getByText('Read-Only')).toBeInTheDocument();
+    expect(screen.queryByText('Read-Only')).not.toBeInTheDocument(); // groups can now have members added and removed
     expect(screen.queryByRole('link', { name: /Computers/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Activity and Logs/ })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^Settings/ })).not.toBeInTheDocument();

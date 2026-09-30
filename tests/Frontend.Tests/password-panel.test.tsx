@@ -122,29 +122,38 @@ describe('password reset panel', () => {
   });
 });
 
-describe('generated password length', () => {
-  it('uses the policy length by default, shows it, and lets the operator change it for one reset', async () => {
-    const u = userEvent.setup();
+describe('password tools', () => {
+  it('has no per-reset length box: the length comes from Settings > Action Policies', async () => {
     render(<PasswordResetPanel user={user} onChanged={() => {}} />);
-    const len = screen.getByLabelText('Characters') as HTMLInputElement;
-    expect(len.value).toBe('16');
-    await u.clear(len);
-    await u.type(len, '24');
-    await u.click(screen.getByRole('button', { name: /Generate secure password/ }));
-    expect(field(/^New password/).value).toHaveLength(24);
+    expect(screen.queryByLabelText('Characters')).not.toBeInTheDocument();
+    expect(screen.getByText(/16 characters long/)).toBeInTheDocument();
   });
 
-  it('refuses lengths outside 8 to 128', async () => {
+  it('shows and hides the password with an eye button', async () => {
     const u = userEvent.setup();
     render(<PasswordResetPanel user={user} onChanged={() => {}} />);
-    const len = screen.getByLabelText('Characters') as HTMLInputElement;
-    await u.clear(len);
-    await u.type(len, '5');
-    expect(screen.getByRole('alert')).toHaveTextContent('8 to 128');
-    expect(screen.getByRole('button', { name: /Generate secure password/ })).toBeDisabled();
-    await u.clear(len);
-    await u.type(len, '129');
-    expect(screen.getByRole('button', { name: /Generate secure password/ })).toBeDisabled();
+    expect(field(/^New password/).type).toBe('password');
+    const eyes = screen.getAllByRole('button', { name: 'Show password' });
+    expect(eyes).toHaveLength(2);
+    await u.click(eyes[0]);
+    expect(field(/^New password/).type).toBe('text');
+    expect(field(/^Confirm password/).type).toBe('text');
+    expect(screen.getAllByRole('button', { name: 'Hide password' })[0]).toHaveAttribute('aria-pressed', 'true');
+    await u.click(screen.getAllByRole('button', { name: 'Hide password' })[0]);
+    expect(field(/^New password/).type).toBe('password');
+  });
+
+  it('copies the password from a button that looks like the generate button, and shows a green tick', async () => {
+    const u = userEvent.setup();
+    render(<PasswordResetPanel user={user} onChanged={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Copy password' })).not.toBeInTheDocument(); // nothing to copy yet
+    await u.click(screen.getByRole('button', { name: /Generate secure password/ }));
+    const copy = screen.getByRole('button', { name: 'Copy password' });
+    expect(copy).toHaveClass('btn-sm');
+    expect(copy).not.toHaveClass('btn-ghost');
+    await u.click(copy);
+    expect(await screen.findByRole('button', { name: 'Copy password' })).toHaveClass('is-done');
+    expect(await navigator.clipboard.readText()).toBe(field(/^New password/).value);
   });
 });
 

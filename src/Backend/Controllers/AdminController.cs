@@ -28,21 +28,29 @@ public sealed class AdminController(AppDbContext db, AccessService access, Acces
     [HttpGet("roles"), Authorize(Policy = PermissionPolicies.AdminAccess)]
     public async Task<IActionResult> GetRoles() => Ok(await manage.ListRolesAsync());
 
+    /// <summary>The OUs and groups a role's Active Directory scope can be chosen from (the global manageable lists). Empty when AD is not available.</summary>
+    [HttpGet("roles/ad-scope-options"), Authorize(Policy = PermissionPolicies.AdminAccess)]
+    public async Task<IActionResult> GetAdScopeOptions([FromServices] IServiceProvider sp)
+    {
+        var catalog = sp.GetService<IAdScopeCatalog>();
+        return Ok(catalog == null ? new AdScopeOptions([], [], []) : await catalog.GetOptionsAsync());
+    }
+
     // ---------- roles (write) ----------
 
-    public sealed record RoleRequest(string Name, string? Description, string[] Permissions);
+    public sealed record RoleRequest(string Name, string? Description, string[] Permissions, AdScope? AdScope = null);
     public sealed record CloneRequest(string Name);
 
     [HttpPost("roles"), Authorize(Policy = Permissions.AdminRolesManage)]
     public async Task<IActionResult> CreateRole([FromBody] RoleRequest r) =>
-        Ok(await manage.CreateRoleAsync(r.Name, r.Description, r.Permissions ?? []));
+        Ok(await manage.CreateRoleAsync(r.Name, r.Description, r.Permissions ?? [], r.AdScope));
 
     [HttpPost("roles/{id:guid}/clone"), Authorize(Policy = Permissions.AdminRolesManage)]
     public async Task<IActionResult> CloneRole(Guid id, [FromBody] CloneRequest r) => Ok(await manage.CloneRoleAsync(id, r.Name));
 
     [HttpPut("roles/{id:guid}"), Authorize(Policy = Permissions.AdminRolesManage)]
     public async Task<IActionResult> UpdateRole(Guid id, [FromBody] RoleRequest r) =>
-        Ok(await manage.UpdateRoleAsync(id, r.Name, r.Description, r.Permissions ?? []));
+        Ok(await manage.UpdateRoleAsync(id, r.Name, r.Description, r.Permissions ?? [], r.AdScope));
 
     [HttpDelete("roles/{id:guid}"), Authorize(Policy = Permissions.AdminRolesManage)]
     public async Task<IActionResult> DeleteRole(Guid id)

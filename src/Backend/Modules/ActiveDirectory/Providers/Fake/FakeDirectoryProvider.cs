@@ -132,6 +132,8 @@ public sealed class FakeDirectoryProvider : IDirectoryProvider
                 q = q.Where(u => Has(u.Sam, t) || Has(u.Sam + "@fake.local", t) || Has(u.Display, t) || Has(u.Given, t) || Has(u.Surname, t) || Has(u.Email, t) || Has(u.Employee, t));
             }
             if (!string.IsNullOrEmpty(s.OuDn)) q = q.Where(u => DnText.IsUnderOrEqual(u.Ou, s.OuDn));
+            if (!string.IsNullOrWhiteSpace(s.Department)) q = q.Where(u => Has(u.Department, s.Department.Trim()));
+            if (!string.IsNullOrWhiteSpace(s.Title)) q = q.Where(u => Has(u.Title, s.Title.Trim()));
             q = s.Filter switch
             {
                 UserFilter.Locked => q.Where(u => u.LockedOut),
@@ -168,6 +170,7 @@ public sealed class FakeDirectoryProvider : IDirectoryProvider
                 q = q.Where(c => Has(c.Name, t) || Has(c.Name + ".fake.local", t));
             }
             if (!string.IsNullOrEmpty(s.OuDn)) q = q.Where(c => DnText.IsUnderOrEqual(c.Ou, s.OuDn));
+            if (ComputerOsTypes.Match(s.OsType) is { } osMatches) q = q.Where(c => osMatches.Any(m => Has(c.Os, m)));
             q = s.Filter switch
             {
                 ComputerFilter.Disabled => q.Where(c => c.Disabled),
@@ -331,6 +334,13 @@ public sealed class FakeDirectoryProvider : IDirectoryProvider
         return Task.FromResult(ou == null ? null : new DirectoryOu(ou, OuName(ou), FakeDirectoryData.OuList.Any(x => DnText.Equal(UserStatus.ParentDn(x), ou))));
     }
 
+    public Task<IReadOnlyList<DateTime>> LockoutTimesAsync(DateTime sinceUtc, int max, CancellationToken ct = default)
+    {
+        Guard();
+        lock (_lock)
+            return Task.FromResult<IReadOnlyList<DateTime>>(_d.Users.Where(u => u.LockedOut && u.LockedAt is { } t && t >= sinceUtc).Select(u => u.LockedAt!.Value).Take(max).ToList());
+    }
+
     public async Task<long> CountUsersAsync(UserFilter filter, CancellationToken ct = default) =>
         (await SearchUsersAsync(new UserSearch(null, filter, 1, 1, null, int.MaxValue, new DirectoryReadOptions()), ct)).Total;
 
@@ -380,7 +390,7 @@ public sealed class FakeDirectoryProvider : IDirectoryProvider
             if (problem != null) return Task.FromResult(DirectoryResult.Fail(false, DirectoryErrors.PasswordRejected, problem));
 
             u.PwdLastSet = options.MustChangeAtNextSignIn ? 0 : DateTime.UtcNow.ToFileTimeUtc();
-            if (options.UnlockAccount) u.LockedOut = false;
+            if (options.UnlockAccount) { u.LockedOut = false; u.LockedAt = null; }
             u.Changed = DateTime.UtcNow;
             return Task.FromResult(DirectoryResult.Ok(false, changes));
         }
@@ -409,7 +419,7 @@ public sealed class FakeDirectoryProvider : IDirectoryProvider
             if (Preflight(userId, DirectoryObjectKind.User, dryRun, out var checks) is { } failed) return Task.FromResult(failed);
             var u = _d.Users.First(x => x.Id == userId);
             var changes = new[] { new DirectoryChange("Locked out", u.LockedOut ? "Yes" : "No", "No") };
-            if (!dryRun) { u.LockedOut = false; u.Changed = DateTime.UtcNow; }
+            if (!dryRun) { u.LockedOut = false; u.LockedAt = null; u.Changed = DateTime.UtcNow; }
             return Task.FromResult(DirectoryResult.Ok(dryRun, changes, checks));
         }
     }

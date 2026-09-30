@@ -4,14 +4,14 @@ using ServiceDashboard.Models;
 
 namespace ServiceDashboard.Services;
 
-public sealed record RoleDto(Guid Id, string Name, string? Description, bool IsSystem, bool IsLocked, IReadOnlyList<string> Permissions, int UserCount, int MappingCount);
+public sealed record RoleDto(Guid Id, string Name, string? Description, bool IsSystem, bool IsLocked, IReadOnlyList<string> Permissions, int UserCount, int MappingCount, AdScope AdScope);
 
 /// <summary>
 /// Manages roles, role assignments and Okta group mappings, and enforces the safeguards:
 /// nobody can raise their own access, nobody can manage a role more powerful than their own,
 /// the last Admins assignment cannot be removed, and every change is audited (denied attempts too).
 /// </summary>
-public sealed class AccessManagementService(AppDbContext db, ICurrentUser currentUser, IAuditService audit, AccessService access)
+public sealed class AccessManagementService(AppDbContext db, ICurrentUser currentUser, IAuditService audit, AccessService access, IServiceProvider services)
 {
     private const string Module = "core";
 
@@ -27,23 +27,24 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
 
     private static RoleDto ToDto(Role r, int users, int maps) =>
         new(r.Id, r.Name, r.Description, r.IsSystem, r.Id == DefaultRoles.AdminsId,
-            r.Permissions.Select(p => p.Permission).Order().ToList(), users, maps);
+            r.Permissions.Select(p => p.Permission).Order().ToList(), users, maps, AdScope.Parse(r.AdScopeJson));
 
-    public async Task<RoleDto> CreateRoleAsync(string name, string? description, IEnumerable<string> permissions, string auditAction = "admin.role.create")
+    public async Task<RoleDto> CreateRoleAsync(string name, string? description, IEnumerable<string> permissions, AdScope? scope = null, string auditAction = "admin.role.create")
     {
         var caller = await Caller();
         var perms = ValidatePermissions(permissions);
         name = await ValidateNameAsync(name, null);
         await RequireCanGrantAsync(caller, perms, auditAction, name);
+        var newScope = await ValidateScopeAsync(caller, scope ?? AdScope.Unrestricted, null, perms, auditAction, name);
 
-        var role = new Role { Name = name, Description = description?.Trim() };
+        var role = new Role { Name = name, Description = description?.Trim(), AdScopeJson = newScope.ToJson() };
         DatabaseSeeder.SetPermissions(role, perms);
         db.Roles.Add(role);
         await db.SaveChangesAsync();
         await audit.WriteAsync(new AuditEntry
         {
             Action = auditAction, Module = Module, Target = "Role: " + name, TargetId = role.Id.ToString(),
-            NewValue = Describe(role.Name, perms),
+            NewValue = Describe(role.Name, perms, newScope),
         });
         return ToDto(role, 0, 0);
     }
@@ -51,15 +52,16 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
     public async Task<RoleDto> CloneRoleAsync(Guid id, string name)
     {
         var source = await db.Roles.Include(r => r.Permissions).FirstOrDefaultAsync(r => r.Id == id) ?? throw NotFound("Role");
-        return await CreateRoleAsync(name, source.Description, source.Permissions.Select(p => p.Permission), "admin.role.clone");
+        return await CreateRoleAsync(name, source.Description, source.Permissions.Select(p => p.Permission), AdScope.Parse(source.AdScopeJson), "admin.role.clone");
     }
 
-    public async Task<RoleDto> UpdateRoleAsync(Guid id, string name, string? description, IEnumerable<string> permissions)
+    public async Task<RoleDto> UpdateRoleAsync(Guid id, string name, string? description, IEnumerable<string> permissions, AdScope? scope = null)
     {
         var caller = await Caller();
         var role = await db.Roles.Include(r => r.Permissions).FirstOrDefaultAsync(r => r.Id == id) ?? throw NotFound("Role");
         var perms = ValidatePermissions(permissions);
-        var before = Describe(role.Name, role.Permissions.Select(p => p.Permission));
+        var oldScope = AdScope.Parse(role.AdScopeJson);
+        var before = Describe(role.Name, role.Permissions.Select(p => p.Permission), oldScope);
 
         if (role.Id == DefaultRoles.AdminsId)
             throw await Deny("admin.role.update", role, "The Admins role always has every permission and cannot be edited.");
@@ -69,15 +71,17 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
         name = await ValidateNameAsync(name, role.Id);
         var added = perms.Except(role.Permissions.Select(p => p.Permission)).ToList();
         await RequireCanGrantAsync(caller, added, "admin.role.update", role.Name, role);
+        var newScope = scope == null ? oldScope : await ValidateScopeAsync(caller, scope, oldScope, perms, "admin.role.update", role.Name, role);
 
         role.Name = name;
         role.Description = description?.Trim();
+        role.AdScopeJson = newScope.ToJson();
         DatabaseSeeder.SetPermissions(role, perms);
         await db.SaveChangesAsync();
         await audit.WriteAsync(new AuditEntry
         {
             Action = "admin.role.update", Module = Module, Target = "Role: " + name, TargetId = role.Id.ToString(),
-            PreviousValue = before, NewValue = Describe(name, perms),
+            PreviousValue = before, NewValue = Describe(name, perms, newScope),
         });
         return ToDto(role, await db.UserRoles.CountAsync(x => x.RoleId == id), await db.GroupMappings.CountAsync(x => x.RoleId == id));
     }
@@ -95,7 +99,7 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
         await audit.WriteAsync(new AuditEntry
         {
             Action = "admin.role.delete", Module = Module, Target = "Role: " + role.Name, TargetId = id.ToString(),
-            PreviousValue = Describe(role.Name, role.Permissions.Select(p => p.Permission)),
+            PreviousValue = Describe(role.Name, role.Permissions.Select(p => p.Permission), AdScope.Parse(role.AdScopeJson)),
         });
     }
 
@@ -139,6 +143,7 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
         var changed = wanted.Except(current).Concat(current.Except(wanted)).ToList();
         foreach (var rid in changed)
             await RequireHoldsAsync(caller, roles[rid].Permissions.Select(p => p.Permission).ToHashSet(), "admin.user.roles", user);
+        foreach (var rid in wanted.Except(current)) await RequireScopeWithinAsync(caller, roles[rid], "admin.user.roles", user);
 
         if (current.Contains(DefaultRoles.AdminsId) && !wanted.Contains(DefaultRoles.AdminsId)
             && user.IsEnabled && await AdminAssignmentsAsync(excludeUser: user.Id) == 0)
@@ -164,6 +169,7 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
         if (oktaGroup.Length is 0 or > 256) throw new ApiException(400, "Invalid group", "Enter the Okta group name (up to 256 characters).", "validation");
         var role = await db.Roles.Include(r => r.Permissions).FirstOrDefaultAsync(r => r.Id == roleId) ?? throw NotFound("Role");
         await RequireHoldsAsync(caller, role.Permissions.Select(p => p.Permission).ToHashSet(), "admin.mapping.create", role);
+        await RequireScopeWithinAsync(caller, role, "admin.mapping.create", role);
         if (await db.GroupMappings.AnyAsync(m => m.OktaGroup == oktaGroup && m.RoleId == roleId))
             throw new ApiException(409, "Already mapped", "That Okta group is already mapped to this role.", "conflict");
 
@@ -261,5 +267,69 @@ public sealed class AccessManagementService(AppDbContext db, ICurrentUser curren
 
     private static ApiException NotFound(string what) => new(404, "Not found", $"{what} not found.", "not_found");
 
-    private static string Describe(string name, IEnumerable<string> perms) => $"{name}: {string.Join(", ", perms.Order())}";
+    private static string Describe(string name, IEnumerable<string> perms, AdScope? scope = null) =>
+        $"{name}: {string.Join(", ", perms.Order())}" + (scope == null || scope.IsUnrestricted ? "" : " | AD scope: " + DescribeScope(scope));
+
+    private static string DescribeScope(AdScope s)
+    {
+        static string One(string label, List<string>? l) => $"{label}={(l == null ? "all allowed" : l.Count == 0 ? "none" : string.Join(" ; ", l))}";
+        return string.Join(" | ", One("user OUs", s.UserOus), One("computer OUs", s.ComputerOus), One("groups", s.Groups));
+    }
+
+    // ---------- AD scope (which OUs and groups a role may manage) ----------
+
+    /// <summary>
+    /// Checks a role's scope: every entry must be on the global manageable lists, and nobody may widen a scope beyond their own reach.
+    /// For a kind of object they cannot change themselves, a person can keep or narrow what a role may manage, never widen it.
+    /// </summary>
+    private async Task<AdScope> ValidateScopeAsync(CurrentUserInfo caller, AdScope requested, AdScope? existing, IReadOnlyCollection<string> rolePermissions, string action, string roleName, Role? role = null)
+    {
+        static List<string>? Clean(List<string>? l) => l?.Select(x => (x ?? "").Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var next = new AdScope { UserOus = Clean(requested.UserOus), ComputerOus = Clean(requested.ComputerOus), Groups = Clean(requested.Groups) };
+        if (next.IsUnrestricted && existing is { IsUnrestricted: true }) return next;
+        existing ??= AdScope.Unrestricted;
+
+        var catalog = services.GetService<IAdScopeCatalog>();
+        var options = catalog == null ? new AdScopeOptions([], [], []) : await catalog.GetOptionsAsync();
+
+        async Task Check(string label, string[] relevant, List<string>? want, List<string>? had, List<string>? mine, IReadOnlyList<AdScopeOption> allowed)
+        {
+            if (want == null && had == null && !rolePermissions.Any(relevant.Contains)) return; // nothing to limit for a role that cannot change these
+            var unknown = (want ?? []).Where(d => !allowed.Any(a => string.Equals(a.Dn, d, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (unknown.Count > 0)
+                throw new ApiException(400, "Not on the allowed list", $"These {label} are not on the manageable list in Settings > AD Integration: {string.Join("; ", unknown)}", "validation");
+
+            var callerCan = relevant.Any(caller.Permissions.Contains);
+            // Anything the person could not manage themselves (or a role broader than they may grant) is refused.
+            var reference = callerCan ? mine : had;
+            var widens = reference != null && (want == null || want.Any(d => !reference.Contains(d, StringComparer.OrdinalIgnoreCase)));
+            if (want == null && !rolePermissions.Any(relevant.Contains)) widens = false; // "no limit" only matters to a role that can change these objects
+            if (!widens) return;
+            var why = callerCan
+                ? $"You can only give a role the {label} that you can manage yourself."
+                : $"You can narrow what a role may manage, but not widen it: you cannot change {label} yourself.";
+            await audit.WriteAsync(new AuditEntry
+            {
+                Action = action, Module = Module, Target = "Role: " + roleName, TargetId = role?.Id.ToString(), Result = AuditResult.Denied, Error = why,
+            });
+            throw new ApiException(403, "Not allowed", why, "escalation");
+        }
+
+        var mineScope = caller.AdScope;
+        await Check("user OUs", AccessService.UserChangePermissions, next.UserOus, existing.UserOus, mineScope.UserOus, options.UserOus);
+        await Check("computer OUs", AccessService.ComputerChangePermissions, next.ComputerOus, existing.ComputerOus, mineScope.ComputerOus, options.ComputerOus);
+        await Check("groups", AccessService.GroupChangePermissions, next.Groups, existing.Groups, mineScope.Groups, options.Groups);
+        return next;
+    }
+
+    /// <summary>A role broader than the assigner's own reach cannot be handed out (for example by assigning it to someone).</summary>
+    private async Task RequireScopeWithinAsync(CurrentUserInfo caller, Role role, string action, object target)
+    {
+        var scope = AdScope.Parse(role.AdScopeJson);
+        var mine = caller.AdScope;
+        bool Wider(List<string>? want, List<string>? have) => have != null && (want == null || want.Any(d => !have.Contains(d, StringComparer.OrdinalIgnoreCase)));
+        if (role.Id == DefaultRoles.AdminsId) return; // already guarded by the permission check
+        if (Wider(scope.UserOus, mine.UserOus) || Wider(scope.ComputerOus, mine.ComputerOus) || Wider(scope.Groups, mine.Groups))
+            throw await Deny(action, target, "This role can manage more of Active Directory than you can, so you cannot assign it.", 403);
+    }
 }
