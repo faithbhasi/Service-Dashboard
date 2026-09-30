@@ -1,0 +1,18 @@
+bin/
+obj/
+node_modules/
+.vs/
+*.user
+# generated frontend build
+src/Backend/wwwroot/*
+!src/Backend/wwwroot/.gitkeep
+# local runtime data (fake AD development)
+src/Backend/data/
+src/Backend/logs/
+src/Backend/appsettings.Production.json
+*.db
+*.db-wal
+*.db-shm
+TestResults/
+coverage/
+.dotnet-tools/
