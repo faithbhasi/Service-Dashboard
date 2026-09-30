@@ -82,9 +82,23 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 * **One pipeline** (`AdChangeService`): permission, input checks from Action Policies, fresh re-read, allowlist/protected checks,
   dry run, change, audit, result with the correlation ID. Group add/remove runs the full pipeline **once per group** so each is validated,
   audited and reported separately.
-* **Dry runs are always recorded** as "Validated (no change made)": the confirmation preview, an explicit "Validate only", and the
+* **Group membership can also be changed from a group** (Groups > open a group). It is the same pipeline, run once per *user*, with the
+  same permissions (`ad.users.groups.add` / `ad.users.groups.remove`), the same manageable-groups allowlist and protected-group rules, and one
+  audit row per user (so it also appears in that user's activity history). When the Action Policy asks for a typed confirmation, the
+  confirmation from a group is the group's name. Up to 50 users per request; only users, not computers or nested groups, can be removed there.
+* **Resetting a password with "also unlock"** needs the unlock permission as well as the reset permission (checked on the server, not just hidden
+  in the screen). The "Unlock account" button is always available, because the lockout state shown can lag the domain controller; the
+  server re-reads it and reports "no change" if the account is no longer locked.
+* **Generated password length** is one global setting (Settings > Action Policies, 8 to 128), not chosen per reset.
+* **Hourly chart on Home**: password resets and unlocks are counted from this application's audit log; lockouts come from the `lockoutTime`
+  Active Directory keeps on each account (read through LDAP, capped at 5000). AD does not keep a history of lockouts, so an account that
+  was locked and already unlocked may not be counted, and the chart can never show lockouts from before the account's last lockout.
+* **User and computer filters**: department and job title are "contains" filters on the `department` and `title` attributes; the operating
+  system filter offers fixed families (Windows 11, Windows 10, Windows Server, macOS, Linux) matched on `operatingSystem`. All values are
+  escaped like the search text. There are no drop-down lists of existing departments or titles because AD cannot list distinct values cheaply.
+* **Dry runs are always recorded** as "Validated (no change made)": the confirmation preview, an explicit "Validate", and the
   automatic dry run inside a real change. A single change therefore leaves up to three audit rows (preview, automatic validation, result).
-* "Validate only" needs the action's own permission. In the UI the button is shown to people with `settings.manage` (the spec says
+* "Validate" (a dry run that changes nothing) needs the action's own permission. In the UI the button is shown to people with `settings.manage` (the spec says
   "admins"); the confirmation dialog uses the same dry run to show its preview to everyone who may make the change.
 * HTTP mapping of the result body (a `ChangeResult` in every case): success, no-change and validated = 200; denied = 403; failed
   (including a failed dry run) = 422; missing justification/ticket/typed confirmation = 400; directory unreachable = 503.
@@ -162,12 +176,16 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 
 ## Known limitations
 
+* The LDAP query behind the hourly lockout chart (`lockoutTime>=...`) and the department, title and operating-system filters are covered by
+  filter-building tests and the Fake provider, but have not been run against a real Microsoft Active Directory. Check them with your test
+  domain first (Home > Activity by hour, and the filters on Users and Computers).
+
 * **The LDAP provider has not been run against Microsoft Active Directory.** During development it was exercised end to end against an
   AD-compatible test directory (LDAPS bind, search, sort + VLV paging, computed lockout/expiry attributes, nested and primary groups,
   group member search, `unicodePwd` reset, enable/disable, unlock, `ModifyDN` moves, membership changes and the dry run reading
   `allowedAttributesEffective` / `allowedChildClassesEffective`). Microsoft AD can still differ (AdminSDHolder/SDProp, fine-grained
   password policy objects, some constructed attributes), so verify the delegated rights in `AD-DELEGATION.md` in a test OU of a Microsoft
-  test domain, using "Validate only", before go-live.
+  test domain, using "Validate", before go-live.
 * Nothing was tested against a real Okta org; the OIDC handler configuration follows the standard pattern and `OKTA-SETUP.md`.
 * Not tested on Windows/IIS (built and tested on Linux). `dotnet publish` output was inspected and contains `web.config` (in-process hosting).
 * Idle-timeout behaviour is unit tested through the cookie validator; there is no browser test that waits out a real timeout.

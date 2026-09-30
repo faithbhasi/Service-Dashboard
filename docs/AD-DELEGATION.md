@@ -6,7 +6,7 @@ runs as the gMSA and the LDAP connection binds as that identity.
 
 > **Read this first.** The rights below are what the application's actions need, worked out from the AD schema and the
 > LDAP calls the code makes. The code has not been run against a real domain controller in this repository's test
-> environment. Create a **test OU** first, delegate there, and use each action's **Validate only** button (the dry run
+> environment. Create a **test OU** first, delegate there, and use each action's **Validate** button (the dry run
 > reads `allowedAttributesEffective` / `allowedChildClassesEffective`, so it tells you which right is missing without
 > changing anything) before delegating in production.
 
@@ -113,6 +113,6 @@ Set the allowlists to the OUs you delegated above and no more.
 
 1. Sign in as an Admin, open **Settings > AD Integration** and press **Test connection**: bind, search base, secure
    connection and a sample search should all pass.
-2. Open a user in a delegated test OU and press **Validate only** on Account Actions (Password reset, Unlock, Enable/Disable), Groups (Add) and
+2. Open a user in a delegated test OU and press **Validate** on Account Actions (Password reset, Unlock, Enable/Disable), Groups (Add) and
    Move OU. Each check names the right that is missing, if any.
 3. Try one real change on a test account and look at **Activity and Logs > Admin Actions**.

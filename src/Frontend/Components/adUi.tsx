@@ -26,6 +26,15 @@ export function Ou({ dn }: { dn: string }) {
   return <span title={dn}>{ouPath(dn)}</span>;
 }
 
+/** "Label: value" for the pop-up headers: a small grey label and a larger value. */
+export function HeaderField({ label, children, end = false }: { label: string; children: ReactNode; end?: boolean }) {
+  return (
+    <span className={`hf ${end ? 'hf-end' : ''}`}>
+      <span className="hf-label">{label}:</span> <span className="hf-value">{children}</span>
+    </span>
+  );
+}
+
 export function EnabledTag({ enabled }: { enabled: boolean }) {
   return <Tag kind={enabled ? 'success' : 'error'}>{enabled ? 'Enabled' : 'Disabled'}</Tag>;
 }

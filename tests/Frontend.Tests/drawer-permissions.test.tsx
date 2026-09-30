@@ -14,7 +14,12 @@ const detail = {
   },
   ouManageable: true, ouReason: null,
 };
-const groups = { direct: [{ id: 'g1', dn: 'CN=G1', ou: 'OU=G', name: 'GG-One', description: null, scope: 'Global', type: 'Security', managedBy: null, memberCount: 1, isProtected: false, isManageable: true, blockReason: null }], nested: [], primary: null };
+const grp = (id: string, name: string, extra = {}) => ({ id, dn: `CN=${name}`, ou: 'OU=G', name, description: null, scope: 'Global', type: 'Security', managedBy: null, memberCount: 1, isProtected: false, isManageable: true, blockReason: null, ...extra });
+const groups = {
+  direct: [grp('g1', 'GG-One')],
+  nested: [{ group: grp('g2', 'GG-Nested', { isManageable: false }), via: 'GG-One' }],
+  primary: grp('g3', 'Domain Users', { isManageable: false }),
+};
 
 vi.mock('../../src/Frontend/Services/api', async () => {
   const actual = await vi.importActual<typeof import('../../src/Frontend/Services/api')>('../../src/Frontend/Services/api');
@@ -82,9 +87,59 @@ describe('user drawer tabs follow permissions', () => {
   it('shows the current group memberships above the add-to-groups section', async () => {
     granted = ['ad.users.read', 'ad.users.groups.add'];
     await show('groups');
-    const memberships = await screen.findByText(/Direct groups \(1\)/);
+    const memberships = await screen.findByText(/Group memberships \(3\)/);
     const add = await screen.findByText('Add to groups');
     expect(memberships.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('merges direct, nested and primary groups into one list with badges, and marks what cannot be removed', async () => {
+    granted = ['ad.users.read', 'ad.users.groups.remove'];
+    await show('groups');
+    await screen.findByText(/Group memberships \(3\)/);
+    expect(screen.getByText('Domain Users')).toBeInTheDocument();
+    expect(screen.getByText('GG-Nested')).toBeInTheDocument();
+    expect(screen.getByText('Nested via GG-One')).toBeInTheDocument();
+    expect(screen.getByText('Primary')).toBeInTheDocument();
+    expect(screen.getAllByText('Cannot be removed')).toHaveLength(2); // the primary and the nested group
+    expect(screen.getByRole('checkbox', { name: 'Select GG-One' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Select Domain Users' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Select GG-Nested' })).toBeDisabled();
+    // One scrollable list, with the remove button directly under it.
+    expect(document.querySelector('.scroll-area')).not.toBeNull();
+  });
+
+  it('puts the remove button between the memberships and add-to-groups', async () => {
+    granted = ['ad.users.read', 'ad.users.groups.add', 'ad.users.groups.remove'];
+    await show('groups');
+    const remove = await screen.findByRole('button', { name: /Remove from/ });
+    const add = await screen.findByText('Add to groups');
+    const list = document.querySelector('.scroll-area')!;
+    expect(list.compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(remove.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows the username, email with a copy icon, job title, department and OU in the header', async () => {
+    granted = ALL;
+    await show();
+    const head = document.querySelector('.summary')!;
+    expect(head.textContent).toContain('Username: alice');
+    expect(head.textContent).toContain('Email: alice@x.test');
+    expect(head.textContent).toContain('Job title: Not set');
+    expect(head.textContent).toContain('Department: Not set');
+    expect(head.querySelector('.hf-end')?.textContent).toContain('OU:');
+    expect(screen.getByRole('button', { name: 'Copy email address' })).toBeInTheDocument();
+    const lines = head.querySelectorAll('.summary-line');
+    expect(lines).toHaveLength(2);
+  });
+
+  it('turns the refresh icon into a green tick when pressed, and reloads', async () => {
+    granted = ALL;
+    await show();
+    const refresh = screen.getByRole('button', { name: 'Refresh' });
+    expect(refresh).toHaveAttribute('title', 'Refresh');
+    expect(refresh).not.toHaveClass('is-done');
+    await userEvent.click(refresh);
+    expect(screen.getByRole('button', { name: 'Refresh' })).toHaveClass('is-done');
   });
 
   it('still opens the right tab from old links', async () => {
@@ -101,17 +156,17 @@ describe('user drawer tabs follow permissions', () => {
     expect(screen.getByRole('checkbox', { name: 'Select GG-One' })).toBeInTheDocument();
   });
 
-  it('shows "Validate only" to people who manage settings and hides it from everyone else', async () => {
+  it('shows "Validate" to people who manage settings and hides it from everyone else', async () => {
     granted = ['ad.users.read', 'ad.users.unlock'];
     await show('account');
     expect(await screen.findByRole('button', { name: 'Unlock account' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Validate only' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Validate' })).not.toBeInTheDocument();
   });
 
-  it('shows "Validate only" when settings.manage is held', async () => {
+  it('shows "Validate" when settings.manage is held', async () => {
     granted = ['ad.users.read', 'ad.users.unlock', 'settings.manage'];
     await show('account');
-    expect(await screen.findByRole('button', { name: 'Validate only' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Validate' })).toBeInTheDocument();
   });
 
   it('switches tabs when one is clicked', async () => {

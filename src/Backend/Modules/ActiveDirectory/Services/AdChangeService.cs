@@ -29,6 +29,8 @@ public sealed class ResetPasswordRequest : ChangeInput
 
 public sealed class MoveRequest : ChangeInput { public string? TargetOu { get; set; } }
 public sealed class GroupsRequest : ChangeInput { public Guid[]? GroupIds { get; set; } }
+/// <summary>Adds or removes several users from one group (the Groups page), as opposed to one user from several groups.</summary>
+public sealed class GroupMembersRequest : ChangeInput { public Guid[]? UserIds { get; set; } }
 
 public sealed record ChangeResult(
     string Status, string Message, string CorrelationId, string Action, string Target, string? ErrorCode,
@@ -355,6 +357,38 @@ public sealed class AdChangeService(
                 Describe = t => [new DirectoryChange("Group membership: " + name, add ? "Not a member" : "Member", add ? "Member" : "Not a member")],
                 Apply = dry => add ? provider.AddToGroupsAsync(userId, [gid], dry, ct) : provider.RemoveFromGroupsAsync(userId, [gid], dry, ct),
             }, ct));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Adds or removes several users from one group. Each user goes through exactly the same pipeline as from the user's own
+    /// Groups tab (permission, Action Policy, fresh re-read, allowlists, protected objects, dry run, audit) and is reported separately.
+    /// </summary>
+    public async Task<IReadOnlyList<ChangeResult>> ChangeGroupMembersAsync(Guid groupId, bool add, GroupMembersRequest req, CancellationToken ct)
+    {
+        var ids = (req.UserIds ?? []).Distinct().ToList();
+        if (ids.Count == 0) throw new ApiException(400, "No users selected", "Select at least one user.", "validation");
+        if (ids.Count > 50) throw new ApiException(400, "Too many users", "Select up to 50 users at a time.", "validation");
+
+        var group = await provider.GetGroupAsync(groupId, ct) ?? throw new ApiException(404, "Not found", "Group not found in the directory.", "not_found");
+        // From the Groups page the thing being changed is the group, so the typed confirmation is the group's name (checked once here).
+        var policies = await settings.GetActionPoliciesAsync();
+        var key = add ? ActionKeys.AddToGroups : ActionKeys.RemoveFromGroups;
+        if (policies.Actions.TryGetValue(key, out var policy) && policy.TypedConfirmationRequired && !req.ValidateOnly
+            && !string.Equals(req.TypedConfirmation?.Trim(), group.Name, StringComparison.OrdinalIgnoreCase))
+            throw new ApiException(400, "Confirmation does not match", $"Type {group.Name} exactly to confirm.", "validation");
+
+        var results = new List<ChangeResult>();
+        foreach (var userId in ids)
+        {
+            var user = await provider.GetUserAsync(userId, (await adSettings.GetAsync()).ReadOptions, ct);
+            var perUser = new GroupsRequest
+            {
+                GroupIds = [groupId], Justification = req.Justification, TicketNumber = req.TicketNumber, ValidateOnly = req.ValidateOnly,
+                TypedConfirmation = user?.SamAccountName, // already confirmed against the group name above
+            };
+            results.AddRange(await ChangeGroupsAsync(userId, add, perUser, ct));
         }
         return results;
     }

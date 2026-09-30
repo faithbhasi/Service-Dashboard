@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { HourlyActivityCard } from '../Components/HourlyChart';
 import { PageGuard } from '../Components/PageGuard';
 import { Card, DataTable, ErrorNote, Note, PageHeader, Spinner, Tag } from '../Components/ui';
 import { useAuth } from '../Hooks/AuthContext';
@@ -15,7 +16,7 @@ export const resultKind = (r: string) => (r === 'Success' ? 'success' : r === 'F
 
 export function HomePage() {
   const { me, can } = useAuth();
-  const { dateTime } = useShell();
+  const { dateTime, moduleEnabled } = useShell();
   const allowed = can(Permissions.DashboardRead);
   const data = useAsync(() => (allowed ? get<Dashboard>('/dashboard') : Promise.resolve(undefined)), [allowed]);
   const d = data.data;
@@ -37,6 +38,7 @@ export function HomePage() {
               </Link>
             ))}
           </div>
+          {can(Permissions.AdUsersRead) && moduleEnabled('ad') && <HourlyActivityCard />}
           {d.lastActions && (
             <Card title={d.lastActions.title}>
               <DataTable rows={d.lastActions.items} rowKey={(a) => String(a.id)} empty="No admin actions have been recorded yet."

@@ -11,10 +11,10 @@ using ServiceDashboard.Services;
 
 namespace ServiceDashboard.Modules.ActiveDirectory.Controllers;
 
-/// <summary>Groups are read-only in Version 1. Membership changes happen from the user drawer.</summary>
+/// <summary>Groups are read-only except for their user members: add and remove go through the same change pipeline as the user's Groups tab.</summary>
 [ApiController, ModuleGate(ActiveDirectoryModule.Id)]
 [Route("api/modules/ad/groups")]
-public sealed class AdGroupsController(AdDirectoryService ad, IAuditService audit, IOptions<AppOptions> app) : ControllerBase
+public sealed class AdGroupsController(AdDirectoryService ad, AdChangeService changes, IAuditService audit, IOptions<AppOptions> app) : ControllerBase
 {
     [HttpGet, Authorize(Policy = Permissions.AdGroupsRead), EnableRateLimiting(RateLimitPolicies.Search)]
     public async Task<IActionResult> Search([FromQuery] string? q, [FromQuery] int page = 1, [FromQuery] int pageSize = 25, CancellationToken ct = default) =>
@@ -28,6 +28,26 @@ public sealed class AdGroupsController(AdDirectoryService ad, IAuditService audi
     [HttpGet("{id:guid}/members"), Authorize(Policy = Permissions.AdGroupsRead), EnableRateLimiting(RateLimitPolicies.Search)]
     public async Task<IActionResult> Members(Guid id, [FromQuery] string? q, [FromQuery] MemberKind? kind, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default) =>
         Ok(await ad.SearchMembersAsync(id, q, kind, page, pageSize, ct));
+
+    /// <summary>Users that could be added to this group, matching the search text, flagged when already a direct member.</summary>
+    [HttpGet("{id:guid}/addable-users"), Authorize(Policy = Permissions.AdUsersGroupsAdd), EnableRateLimiting(RateLimitPolicies.Search)]
+    public async Task<IActionResult> AddableUsers(Guid id, [FromQuery] string? q, CancellationToken ct = default)
+    {
+        var text = q?.Trim();
+        if (string.IsNullOrEmpty(text) || text.Length < 2) return Ok(Array.Empty<object>());
+        var users = await ad.SearchUsersAsync(text, UserFilter.All, 1, 20, null, ct);
+        var members = await ad.SearchMembersAsync(id, text, MemberKind.User, 1, 200, ct);
+        var memberIds = members.Items.Select(m => m.Id).ToHashSet();
+        return Ok(users.Items.Select(u => new { u.Id, name = u.DisplayName ?? u.SamAccountName, u.SamAccountName, u.Email, u.Enabled, alreadyMember = memberIds.Contains(u.Id) }));
+    }
+
+    [HttpPost("{id:guid}/members/add"), Authorize(Policy = Permissions.AdUsersGroupsAdd), EnableRateLimiting(RateLimitPolicies.Write)]
+    public async Task<IActionResult> AddMembers(Guid id, [FromBody] GroupMembersRequest req, CancellationToken ct) =>
+        Ok(new { results = await changes.ChangeGroupMembersAsync(id, add: true, req, ct) });
+
+    [HttpPost("{id:guid}/members/remove"), Authorize(Policy = Permissions.AdUsersGroupsRemove), EnableRateLimiting(RateLimitPolicies.Write)]
+    public async Task<IActionResult> RemoveMembers(Guid id, [FromBody] GroupMembersRequest req, CancellationToken ct) =>
+        Ok(new { results = await changes.ChangeGroupMembersAsync(id, add: false, req, ct) });
 
     [HttpGet("{id:guid}/members/export"), Authorize(Policy = Permissions.AdGroupsMemberExport)]
     public async Task<IActionResult> ExportMembers(Guid id, [FromQuery] string? q, [FromQuery] MemberKind? kind, CancellationToken ct = default)

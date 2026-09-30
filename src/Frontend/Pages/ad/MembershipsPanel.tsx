@@ -1,55 +1,59 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { GroupTags } from '../../Components/adUi';
-import { Card, DataTable, ErrorNote, Note, Spinner, Tag } from '../../Components/ui';
+import { Card, DataTable, ErrorNote, Spinner, Tag } from '../../Components/ui';
 import { useAsync } from '../../Hooks/useAsync';
 import { get } from '../../Services/api';
 import type { AdGroup, Memberships } from '../../Services/adTypes';
 
-/** Direct, nested and primary group memberships. Remove controls are added by the user drawer. */
-export function MembershipsPanel({ path, reloadKey, canRemove, selected, onSelect, directFooter }: {
+interface Row { group: AdGroup; how: 'Direct' | 'Nested' | 'Primary'; via: string | null; removable: boolean; why: string | null }
+
+/** Direct, nested and primary memberships merged into one scrollable list. Remove controls are added by the user drawer. */
+export function MembershipsPanel({ path, reloadKey, canRemove, selected, onSelect, footer }: {
   path: string; reloadKey?: number; canRemove?: boolean; selected?: Set<string>; onSelect?: (id: string, on: boolean) => void;
-  /** Shown under the direct groups list (the drawer puts the remove button here). */
-  directFooter?: ReactNode;
+  /** Shown under the list, inside the same card (the drawer puts the remove button here). */
+  footer?: ReactNode;
 }) {
   const data = useAsync(() => get<Memberships>(path), [path, reloadKey]);
   if (data.loading && !data.data) return <Spinner />;
   if (data.error) return <ErrorNote error={data.error} />;
   const m = data.data!;
 
-  const nameCell = (g: AdGroup) => <Link to={`/ad/groups/${g.id}`}><strong>{g.name}</strong></Link>;
+  const rows: Row[] = [
+    ...m.direct.map((g): Row => ({ group: g, how: 'Direct', via: null, removable: g.isManageable, why: g.blockReason })),
+    ...(m.primary ? [{ group: m.primary, how: 'Primary', via: null, removable: false, why: 'The primary group (usually Domain Users) is not a normal membership.' } as Row] : []),
+    ...m.nested.map((n): Row => ({ group: n.group, how: 'Nested', via: n.via, removable: false, why: 'Reached through another group, so it cannot be changed directly.' })),
+  ];
+
   return (
-    <>
-      <Card title={`Direct groups (${m.direct.length})`}>
-        <DataTable rows={m.direct} rowKey={(g) => g.id} empty="Not a direct member of any group (other than the primary group)."
+    <Card title={`Group memberships (${rows.length})`}>
+      <p className="muted small">
+        {m.direct.length} direct, {m.nested.length} nested{m.primary ? `, and the primary group ${m.primary.name}` : ''}.
+        Only direct memberships on the manageable groups list can be removed.
+      </p>
+      <div className="scroll-area" tabIndex={0} aria-label="Group memberships">
+        <DataTable rows={rows} rowKey={(r) => r.how + r.group.id} empty="Not a member of any group."
           columns={[
             ...(canRemove ? [{
-              key: 'sel', header: '', render: (g: AdGroup) => (
-                <input type="checkbox" aria-label={`Select ${g.name}`} disabled={!g.isManageable}
-                  title={g.blockReason ?? undefined} checked={selected?.has(g.id) ?? false} onChange={(e) => onSelect?.(g.id, e.target.checked)} />
+              key: 'sel', header: '', render: (r: Row) => (
+                <input type="checkbox" aria-label={`Select ${r.group.name}`} disabled={!r.removable}
+                  title={r.why ?? undefined} checked={selected?.has(r.group.id) ?? false} onChange={(e) => onSelect?.(r.group.id, e.target.checked)} />
               ),
             }] : []),
-            { key: 'name', header: 'Group', render: nameCell },
-            { key: 'tags', header: 'Scope and type', render: (g) => <GroupTags g={g} /> },
-            { key: 'desc', header: 'Description', render: (g) => g.description ?? '' },
+            { key: 'name', header: 'Group', render: (r) => <Link to={`/ad/groups/${r.group.id}`}><strong>{r.group.name}</strong></Link> },
+            { key: 'tags', header: 'Scope and type', render: (r) => (
+              <span className="row gap wrap">
+                <Tag>{r.group.scope}</Tag>
+                <Tag>{r.group.type}</Tag>
+                {r.how === 'Nested' && <Tag kind="info" title={r.via ? `Through ${r.via}` : undefined}>Nested{r.via ? ` via ${r.via}` : ''}</Tag>}
+                {r.how === 'Primary' && <Tag kind="info">Primary</Tag>}
+                {r.group.isProtected && <Tag kind="warning" title={r.group.blockReason ?? undefined}>Protected</Tag>}
+                {!r.removable && <Tag kind="muted" title={r.why ?? undefined}>Cannot be removed</Tag>}
+              </span>
+            ) },
+            { key: 'desc', header: 'Description', render: (r) => r.group.description ?? '' },
           ]} />
-        {directFooter}
-      </Card>
-      <Card title={`Nested groups (${m.nested.length})`}>
-        <p className="muted small">Groups reached through other groups. These cannot be changed directly.</p>
-        <DataTable rows={m.nested.map((n) => ({ ...n.group, via: n.via }))} rowKey={(g) => g.id} empty="No nested memberships."
-          columns={[
-            { key: 'name', header: 'Group', render: nameCell },
-            { key: 'via', header: 'Through', render: (g) => g.via ?? '' },
-            { key: 'tags', header: 'Scope and type', render: (g) => <GroupTags g={g} /> },
-          ]} />
-      </Card>
-      <Card title="Primary group">
-        {m.primary
-          ? <div className="row gap wrap">{nameCell(m.primary)} <GroupTags g={m.primary} /> <Tag>Cannot be removed</Tag></div>
-          : <span className="muted">Not available</span>}
-        <Note>The primary group (usually Domain Users) comes from primaryGroupID and is not a normal membership.</Note>
-      </Card>
-    </>
+      </div>
+      {footer}
+    </Card>
   );
 }

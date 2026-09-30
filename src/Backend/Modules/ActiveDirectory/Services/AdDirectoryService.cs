@@ -24,12 +24,15 @@ public sealed class AdDirectoryService(IDirectoryProvider provider, AdSettingsSe
 
     private static int Clamp(int v, int min, int max) => Math.Min(Math.Max(v, min), max);
 
-    public async Task<PagedResult<DirectoryUser>> SearchUsersAsync(string? q, UserFilter filter, int page, int pageSize, string? ou, CancellationToken ct)
+    public async Task<PagedResult<DirectoryUser>> SearchUsersAsync(string? q, UserFilter filter, int page, int pageSize, string? ou, CancellationToken ct,
+        string? department = null, string? title = null)
     {
         var s = await settings.GetAsync();
         return await provider.SearchUsersAsync(new UserSearch(q, filter, Math.Max(1, page), Clamp(pageSize, 1, 200), ValidOu(ou),
-            Clamp(s.SearchResultLimit, 50, 5000), s.ReadOptions), ct);
+            Clamp(s.SearchResultLimit, 50, 5000), s.ReadOptions, Short(department), Short(title)), ct);
     }
+
+    private static string? Short(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim()[..Math.Min(v.Trim().Length, 100)];
 
     public async Task<UserDetail?> GetUserAsync(Guid id, CancellationToken ct)
     {
@@ -40,11 +43,12 @@ public sealed class AdDirectoryService(IDirectoryProvider provider, AdSettingsSe
         return new UserDetail(u, reason == null, reason);
     }
 
-    public async Task<PagedResult<DirectoryComputer>> SearchComputersAsync(string? q, ComputerFilter filter, int page, int pageSize, string? ou, CancellationToken ct)
+    public async Task<PagedResult<DirectoryComputer>> SearchComputersAsync(string? q, ComputerFilter filter, int page, int pageSize, string? ou, CancellationToken ct,
+        string? osType = null)
     {
         var s = await settings.GetAsync();
         return await provider.SearchComputersAsync(new ComputerSearch(q, filter, Math.Max(1, page), Clamp(pageSize, 1, 200), ValidOu(ou),
-            Clamp(s.SearchResultLimit, 50, 5000), s.ReadOptions), ct);
+            Clamp(s.SearchResultLimit, 50, 5000), s.ReadOptions, ComputerOsTypes.Match(osType) == null ? null : osType!.Trim().ToLowerInvariant()), ct);
     }
 
     public async Task<ComputerDetail?> GetComputerAsync(Guid id, CancellationToken ct)

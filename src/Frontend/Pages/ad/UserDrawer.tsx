@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CopyButton, Drawer, ErrorNote, KeyValue, NotSet, Spinner, Tabs, Tag, Card, type TabDef } from '../../Components/ui';
-import { EnabledTag, LockedTag, Ou, ObjectLink, useAdText } from '../../Components/adUi';
+import { CopyButton, Drawer, ErrorNote, KeyValue, NotSet, RefreshButton, Spinner, Tabs, Tag, Card, type TabDef } from '../../Components/ui';
+import { EnabledTag, HeaderField, LockedTag, Ou, ObjectLink, useAdText } from '../../Components/adUi';
 import { useAuth } from '../../Hooks/AuthContext';
 import { useShell } from '../../Hooks/ShellContext';
 import { useAsync } from '../../Hooks/useAsync';
@@ -42,15 +42,18 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
             <h1>{u.displayName ?? u.samAccountName}</h1>
             <EnabledTag enabled={u.enabled} />
             {u.lockedOut && <LockedTag locked />}
-            <button className="btn btn-sm" onClick={refresh}>Refresh</button>
+            <RefreshButton onRefresh={refresh} />
           </div>
-          <div className="summary-meta">
-            {u.title && <span>{u.title}</span>}
-            {u.department && <span>{u.department}</span>}
-            <span>{u.samAccountName}</span>
-            {u.userPrincipalName && <span>{u.userPrincipalName}</span>}
-            {u.email && <span>{u.email}</span>}
-            <span>OU: <Ou dn={u.ou} /></span>
+          <div className="summary-line">
+            <HeaderField label="Username">{u.samAccountName}</HeaderField>
+            <HeaderField label="Email">
+              {u.email ? <>{u.email} <CopyButton value={u.email} label="Copy email address" iconOnly /></> : <NotSet />}
+            </HeaderField>
+          </div>
+          <div className="summary-line">
+            <HeaderField label="Job title">{u.title ?? <NotSet />}</HeaderField>
+            <HeaderField label="Department">{u.department ?? <NotSet />}</HeaderField>
+            <HeaderField label="OU" end><Ou dn={u.ou} /></HeaderField>
           </div>
         </div>
       )}>
@@ -62,7 +65,7 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
             <div className="stack">
               <MembershipsPanel path={`/modules/ad/users/${id}/groups`} reloadKey={version} canRemove={can(Permissions.AdUsersGroupsRemove)} selected={selected}
                 onSelect={(gid, on) => { const n = new Set(selected); on ? n.add(gid) : n.delete(gid); setSelected(n); }}
-                directFooter={can(Permissions.AdUsersGroupsRemove) ? <RemoveFromGroupsBar user={u} selected={selected} onDone={() => { setSelected(new Set()); refresh(); }} /> : undefined} />
+                footer={can(Permissions.AdUsersGroupsRemove) ? <RemoveFromGroupsBar user={u} selected={selected} onDone={() => { setSelected(new Set()); refresh(); }} /> : undefined} />
               {can(Permissions.AdUsersGroupsAdd) && <AddToGroupsPanel user={u} onChanged={refresh} />}
             </div>
           )}

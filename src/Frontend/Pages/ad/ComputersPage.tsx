@@ -13,6 +13,7 @@ import { Permissions } from '../../Services/permissions';
 import { ComputerDrawer } from './ComputerDrawer';
 
 const FILTERS: [string, string][] = [['All', 'All computers'], ['Enabled', 'Enabled'], ['Disabled', 'Disabled']];
+const OS_TYPES: [string, string][] = [['', 'All operating systems'], ['windows11', 'Windows 11'], ['windows10', 'Windows 10'], ['windowsserver', 'Windows Server'], ['macos', 'macOS'], ['linux', 'Linux']];
 const PAGE_SIZE = 25;
 
 export function ComputersPage() {
@@ -33,8 +34,8 @@ export function ComputersPage() {
   const { visible, toggle } = useTableColumns('cols:ad-computers', columns.map((c) => c.key), columns.map((c) => c.key));
 
   const computers = useAsync(
-    () => get<ComputerPage>('/modules/ad/computers' + qs({ q: list.q, filter: list.filter, page: list.page, pageSize: PAGE_SIZE })),
-    [list.q, list.filter, list.page]);
+    () => get<ComputerPage>('/modules/ad/computers' + qs({ q: list.q, filter: list.filter, os: list.param('os'), page: list.page, pageSize: PAGE_SIZE })),
+    [list.q, list.filter, list.param('os'), list.page]);
 
   return (
     <PageGuard page="ad.computers" requires={[Permissions.AdComputersRead]}>
@@ -44,6 +45,9 @@ export function ComputersPage() {
           onChange={(e) => list.setInput(e.target.value)} aria-label="Search computers" />
         <select value={list.filter} onChange={(e) => list.setFilter(e.target.value)} aria-label="Filter computers">
           {FILTERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+        <select value={list.param('os')} onChange={(e) => list.setParam('os', e.target.value)} aria-label="Filter by operating system">
+          {OS_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
         <span className="grow" />
         <ColumnPicker columns={columns} visible={visible} onToggle={toggle} />
