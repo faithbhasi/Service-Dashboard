@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using ServiceDashboard.Data;
 using ServiceDashboard.Models;
 using ServiceDashboard.Services;
 
@@ -7,7 +9,7 @@ namespace ServiceDashboard.Controllers;
 
 [ApiController]
 [Route("api/settings")]
-public sealed class SettingsController(SettingsService settings, ModuleCatalog modules) : ControllerBase
+public sealed class SettingsController(SettingsService settings, ModuleCatalog modules, AppDbContext db) : ControllerBase
 {
     /// <summary>Branding for the login page and the shell. Contains no secrets, so it is public.</summary>
     [HttpGet("branding"), AllowAnonymous]
@@ -15,7 +17,14 @@ public sealed class SettingsController(SettingsService settings, ModuleCatalog m
     {
         var general = await settings.GetGeneralAsync();
         var branding = await settings.GetBrandingAsync();
-        return Ok(new { productName = general.ProductName, light = branding.Light, dark = branding.Dark });
+        var logos = await db.LogoAssets.AsNoTracking().ToListAsync();
+        return Ok(new
+        {
+            productName = general.ProductName, light = branding.Light, dark = branding.Dark,
+            hasLogoLight = logos.Any(l => l.Kind == "logoLight"), hasLogoDark = logos.Any(l => l.Kind == "logoDark"), hasFavicon = logos.Any(l => l.Kind == "favicon"),
+            // Changes whenever a logo changes, so browsers fetch the new image.
+            assetVersion = logos.Count == 0 ? "0" : logos.Max(l => l.UpdatedUtc).Ticks.ToString(),
+        });
     }
 
     /// <summary>What the app shell needs after sign-in: labels, time zone, active banner and module states.</summary>

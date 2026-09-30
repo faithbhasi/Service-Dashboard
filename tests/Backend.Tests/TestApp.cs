@@ -102,5 +102,16 @@ public sealed class TestClient
     public Task<HttpResponseMessage> Put(string url, object? body = null) => Send(HttpMethod.Put, url, body ?? new { });
     public Task<HttpResponseMessage> Delete(string url) => Send(HttpMethod.Delete, url);
 
+    public Task<HttpResponseMessage> Upload(string url, byte[] bytes, string fileName, string contentType = "image/png")
+    {
+        var form = new MultipartFormDataContent();
+        var file = new ByteArrayContent(bytes);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        form.Add(file, "file", fileName);
+        var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = form };
+        req.Headers.Add("X-XSRF-TOKEN", _csrf);
+        return Http.SendAsync(req);
+    }
+
     public async Task<JsonElement> Json(HttpResponseMessage res) => await res.Content.ReadFromJsonAsync<JsonElement>();
 }

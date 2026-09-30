@@ -143,9 +143,13 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
     app.UseHttpsRedirection();
 }
-app.UseSerilogRequestLogging(o => o.GetLevel = (ctx, _, ex) =>
-    ex != null || ctx.Response.StatusCode >= 500 ? Serilog.Events.LogEventLevel.Error
-    : ctx.Request.Path.StartsWithSegments("/api") ? Serilog.Events.LogEventLevel.Information : Serilog.Events.LogEventLevel.Debug);
+app.UseSerilogRequestLogging(o =>
+{
+    o.Logger = app.Services.GetRequiredService<Serilog.ILogger>(); // this host's logger, not the process-wide static one
+    o.GetLevel = (ctx, _, ex) =>
+        ex != null || ctx.Response.StatusCode >= 500 ? Serilog.Events.LogEventLevel.Error
+        : ctx.Request.Path.StartsWithSegments("/api") ? Serilog.Events.LogEventLevel.Information : Serilog.Events.LogEventLevel.Debug;
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
