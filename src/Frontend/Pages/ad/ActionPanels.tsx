@@ -7,7 +7,7 @@ import { useShell } from '../../Hooks/ShellContext';
 import { useAsync, useDebounced } from '../../Hooks/useAsync';
 import { get, qs } from '../../Services/api';
 import { generatePassword } from '../../Services/password';
-import type { AdComputer, AdUser, Memberships } from '../../Services/adTypes';
+import type { AdComputer, AdUser } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { OuPicker } from './OuPicker';
 
@@ -26,13 +26,24 @@ type Mode = null | 'confirm' | 'validate';
 
 // ---------------------------------------------------------------------------------------------------- password
 
+export const MIN_GENERATED_LENGTH = 8;
+export const MAX_GENERATED_LENGTH = 128;
+
 export function PasswordResetPanel({ user, onChanged }: { user: AdUser; onChanged: () => void }) {
   const { shell } = useShell();
+  const { can } = useAuth();
   const [pw, setPw] = useState('');
+  // The generator's length starts at the Action Policies setting and can be adjusted for this one reset.
+  const [lenText, setLenText] = useState(String(shell?.actionPolicies.generatedPasswordLength ?? 16));
+  const len = Number(lenText);
+  const lenValid = Number.isInteger(len) && len >= MIN_GENERATED_LENGTH && len <= MAX_GENERATED_LENGTH;
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
   const [mustChange, setMustChange] = useState(shell?.actionPolicies.mustChangePasswordDefault ?? true);
-  const [unlock, setUnlock] = useState(false);
+  // Unlocking here is an unlock, so it needs the unlock permission, and it only applies while the account is locked out.
+  const [unlockChoice, setUnlockChoice] = useState(true);
+  const canUnlock = can(Permissions.AdUsersUnlock) && user.lockedOut;
+  const unlock = canUnlock && unlockChoice;
   const [mode, setMode] = useState<Mode>(null);
 
   const clear = () => { setPw(''); setConfirm(''); setShow(false); };
@@ -61,14 +72,27 @@ export function PasswordResetPanel({ user, onChanged }: { user: AdUser; onChange
       </div>
       <div className="pwd-row">
         <button className="btn btn-sm" type="button" onClick={() => setShow((s) => !s)}>{show ? 'Hide' : 'Show'}</button>
-        <button className="btn btn-sm" type="button" onClick={() => { const g = generatePassword(shell?.actionPolicies.generatedPasswordLength ?? 16); setPw(g); setConfirm(g); setShow(true); }}>
+        <button className="btn btn-sm" type="button" disabled={!lenValid} onClick={() => { const g = generatePassword(len); setPw(g); setConfirm(g); setShow(true); }}>
           Generate secure password
         </button>
+        <label className="pwd-length" htmlFor="pw-length">
+          <span>Characters</span>
+          <input id="pw-length" type="number" inputMode="numeric" min={MIN_GENERATED_LENGTH} max={MAX_GENERATED_LENGTH} value={lenText}
+            onChange={(e) => setLenText(e.target.value)} aria-invalid={!lenValid} aria-describedby="pw-length-help" />
+        </label>
         {pw && <CopyButton value={pw} label="Copy password" />}
+      </div>
+      <div id="pw-length-help" className={lenValid ? 'muted small' : 'field-error'} role={lenValid ? undefined : 'alert'}>
+        {lenValid
+          ? `Generated passwords use ${len} characters. The default is set under Settings > Action Policies.`
+          : `Enter a length from ${MIN_GENERATED_LENGTH} to ${MAX_GENERATED_LENGTH}.`}
       </div>
       <div className="spacer" />
       <label className="check"><input type="checkbox" checked={mustChange} onChange={(e) => setMustChange(e.target.checked)} /> User must change password at next sign-in</label>
-      <label className="check"><input type="checkbox" checked={unlock} onChange={(e) => setUnlock(e.target.checked)} /> Also unlock the account</label>
+      {canUnlock && (
+        <label className="check"><input type="checkbox" checked={unlockChoice} onChange={(e) => setUnlockChoice(e.target.checked)} /> Also unlock the account (it is currently locked out)</label>
+      )}
+      {!user.enabled && <Note>This account is disabled. The password can be reset, but the user cannot sign in until the account is enabled.</Note>}
       <p className="muted small">Active Directory enforces the domain password policy. If it rejects the password you will be told, without the password being repeated.</p>
       <Actions onValidate={() => setMode('validate')}>
         <button className="btn btn-primary" disabled={!ready} onClick={() => setMode('confirm')}>Reset password</button>
@@ -93,9 +117,13 @@ export function UnlockPanel({ user, onChanged }: { user: AdUser; onChanged: () =
   return (
     <Card title="Unlock account">
       <p>Current state: {user.lockedOut ? <Tag kind="warning">Locked out</Tag> : <Tag kind="success">Not locked</Tag>}</p>
-      <p className="muted small">The lockout state is checked again with the domain controller just before unlocking. If the account is no longer locked, nothing is changed.</p>
-      <Actions onValidate={() => setMode('validate')}>
-        <button className="btn btn-primary" onClick={() => setMode('confirm')}>Unlock account</button>
+      <p className="muted small">
+        {user.lockedOut
+          ? 'The lockout state is checked again with the domain controller just before unlocking. If the account is no longer locked, nothing is changed.'
+          : 'This account is not locked out, so there is nothing to unlock. Use Refresh if it may have been locked since this panel opened.'}
+      </p>
+      <Actions onValidate={() => setMode('validate')} disabled={!user.lockedOut}>
+        <button className="btn btn-primary" disabled={!user.lockedOut} onClick={() => setMode('confirm')}>Unlock account</button>
       </Actions>
       {mode && (
         <ChangeDialog title="Unlock account" policyKey="unlock" path={`/modules/ad/users/${user.id}/unlock`}
@@ -103,6 +131,20 @@ export function UnlockPanel({ user, onChanged }: { user: AdUser; onChanged: () =
           extraBody={() => ({})} confirmLabel="Unlock" onClose={() => setMode(null)} onFinished={(c) => c && onChanged()} />
       )}
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------- account actions (primary tab)
+
+/** Password reset, unlock and enable/disable in one place. Each section only appears when the role holds its permission. */
+export function AccountActionsPanel({ user, onChanged }: { user: AdUser; onChanged: () => void }) {
+  const { can, canAny } = useAuth();
+  return (
+    <div className="stack">
+      {can(Permissions.AdUsersResetPassword) && <PasswordResetPanel user={user} onChanged={onChanged} />}
+      {can(Permissions.AdUsersUnlock) && <UnlockPanel user={user} onChanged={onChanged} />}
+      {canAny(Permissions.AdUsersEnable, Permissions.AdUsersDisable) && <EnableDisablePanel kind="User" obj={user} onChanged={onChanged} />}
+    </div>
   );
 }
 
@@ -192,19 +234,11 @@ export function AddToGroupsPanel({ user, onChanged }: { user: AdUser; onChanged:
   const q = useDebounced(input.trim(), 300);
   const [version, setVersion] = useState(0);
   const groups = useAsync(() => get<Addable[]>(`/modules/ad/users/${user.id}/addable-groups` + qs({ q })), [user.id, q, version]);
-  const current = useAsync(() => get<Memberships>(`/modules/ad/users/${user.id}/groups`), [user.id, version]);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<Mode>(null);
 
   return (
     <Card title="Add to groups">
-      <h3 style={{ marginTop: 0 }}>Current direct groups</h3>
-      <p>
-        {current.data?.direct.length
-          ? current.data.direct.map((g) => <span key={g.id} style={{ marginRight: 6 }}><Tag kind={g.isProtected ? 'warning' : 'neutral'}>{g.name}</Tag></span>)
-          : <span className="muted">{current.loading ? 'Loading...' : 'None (other than the primary group).'}</span>}
-      </p>
-      <h3>Add to</h3>
       <p className="muted small">Only groups on the manageable groups allowlist can be added. Protected groups can never be changed here.</p>
       <input type="search" placeholder="Search manageable groups" value={input} onChange={(e) => setInput(e.target.value)} aria-label="Search groups" style={{ width: '100%', marginBottom: 8 }} />
       <ErrorNote error={groups.error} />

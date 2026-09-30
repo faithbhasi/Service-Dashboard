@@ -18,7 +18,7 @@ export function GroupsPage() {
 
   return (
     <PageGuard page="ad.groups" requires={[Permissions.AdGroupsRead]}>
-      <PageHeader title="Active Directory groups" subtitle="Read-only. Group membership is changed from a user's Add to Groups tab." />
+      <PageHeader title="Active Directory groups" subtitle="Read-only. Group membership is changed from the Groups tab of a user." />
       <div className="toolbar">
         <input type="search" placeholder="Search group name or description" value={list.input}
           onChange={(e) => list.setInput(e.target.value)} aria-label="Search groups" />

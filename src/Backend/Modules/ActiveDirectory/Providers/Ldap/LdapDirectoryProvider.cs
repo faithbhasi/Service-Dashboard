@@ -482,6 +482,13 @@ public sealed class LdapDirectoryProvider(IOptions<ActiveDirectoryOptions> optio
     public Task<DirectoryResult> ResetPasswordAsync(Guid userId, SecureString newPassword, ResetPasswordOptions options, bool dryRun, CancellationToken ct = default) => Run(c =>
     {
         if (Preflight(c, userId, dryRun, "unicodePwd", out var e, out var checks) is { } failed) return failed;
+        if (options.UnlockAccount)
+        {
+            var canUnlock = CanWrite(e!, "lockoutTime");
+            checks.Add(new DryRunCheck("Service account may write 'lockoutTime' on the target (allowedAttributesEffective)", canUnlock,
+                canUnlock ? null : "The service account has no write access to this attribute"));
+            if (!canUnlock) return DirectoryResult.Fail(dryRun, DirectoryErrors.PermissionDenied, "The service account does not have permission to unlock this account.", checks);
+        }
         var changes = new List<DirectoryChange> { new("Password", null, "Reset (value not shown)") };
         if (options.MustChangeAtNextSignIn) changes.Add(new("Must change password at next sign-in", null, "Yes"));
         if (options.UnlockAccount) changes.Add(new("Locked out", null, "No"));

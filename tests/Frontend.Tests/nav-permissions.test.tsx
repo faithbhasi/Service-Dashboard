@@ -46,4 +46,19 @@ describe('navigation is driven by permissions', () => {
     expect(screen.getByRole('link', { name: /^Settings/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Users and Groups/ })).toBeInTheDocument();
   });
+
+  it('keeps Activity and Logs, Users and Groups and Settings together at the bottom', () => {
+    granted = ['ad.users.read', 'logs.read', 'admin.roles.manage', 'settings.read'];
+    const { container } = renderNav();
+    const bottom = container.querySelector('.nav-bottom') as HTMLElement;
+    expect(bottom).not.toBeNull();
+    expect([...bottom.querySelectorAll('a')].map((a) => a.textContent)).toEqual(['Activity and Logs', 'Users and Groups', 'Settings']);
+    expect(bottom.querySelector('a[href="/ad/users"]')).toBeNull();
+    expect(container.querySelector('.nav')!.lastElementChild).toBe(bottom);
+  });
+
+  it('adds no bottom block when none of those areas are available', () => {
+    granted = ['ad.users.read'];
+    expect(renderNav().container.querySelector('.nav-bottom')).toBeNull();
+  });
 });

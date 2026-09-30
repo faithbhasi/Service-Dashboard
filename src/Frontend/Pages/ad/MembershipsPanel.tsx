@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { GroupTags } from '../../Components/adUi';
 import { Card, DataTable, ErrorNote, Note, Spinner, Tag } from '../../Components/ui';
@@ -6,8 +7,10 @@ import { get } from '../../Services/api';
 import type { AdGroup, Memberships } from '../../Services/adTypes';
 
 /** Direct, nested and primary group memberships. Remove controls are added by the user drawer. */
-export function MembershipsPanel({ path, reloadKey, canRemove, selected, onSelect }: {
+export function MembershipsPanel({ path, reloadKey, canRemove, selected, onSelect, directFooter }: {
   path: string; reloadKey?: number; canRemove?: boolean; selected?: Set<string>; onSelect?: (id: string, on: boolean) => void;
+  /** Shown under the direct groups list (the drawer puts the remove button here). */
+  directFooter?: ReactNode;
 }) {
   const data = useAsync(() => get<Memberships>(path), [path, reloadKey]);
   if (data.loading && !data.data) return <Spinner />;
@@ -30,6 +33,7 @@ export function MembershipsPanel({ path, reloadKey, canRemove, selected, onSelec
             { key: 'tags', header: 'Scope and type', render: (g) => <GroupTags g={g} /> },
             { key: 'desc', header: 'Description', render: (g) => g.description ?? '' },
           ]} />
+        {directFooter}
       </Card>
       <Card title={`Nested groups (${m.nested.length})`}>
         <p className="muted small">Groups reached through other groups. These cannot be changed directly.</p>

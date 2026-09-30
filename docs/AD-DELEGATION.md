@@ -113,6 +113,6 @@ Set the allowlists to the OUs you delegated above and no more.
 
 1. Sign in as an Admin, open **Settings > AD Integration** and press **Test connection**: bind, search base, secure
    connection and a sample search should all pass.
-2. Open a user in a delegated test OU and press **Validate only** on Unlock, Enable/Disable, Move OU, Add to Groups and
-   Password Reset. Each check names the right that is missing, if any.
+2. Open a user in a delegated test OU and press **Validate only** on Account Actions (Password reset, Unlock, Enable/Disable), Groups (Add) and
+   Move OU. Each check names the right that is missing, if any.
 3. Try one real change on a test account and look at **Activity and Logs > Admin Actions**.
