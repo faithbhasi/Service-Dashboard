@@ -20,9 +20,6 @@ public static partial class StartupValidator
         if (okta.DevelopmentSignIn && !isDevelopment)
             errors.Add("Okta:DevelopmentSignIn is enabled but the environment is not Development. Development sign-in is for local testing only.");
 
-        if (!isDevelopment && (!string.IsNullOrEmpty(ad.BindUsername) || !string.IsNullOrEmpty(ad.BindPassword)))
-            errors.Add("ActiveDirectory:BindUsername/BindPassword are for local testing only. Outside Development the application binds as its own identity (the gMSA) and no AD password may be configured.");
-
         if (ad.Provider is not ("Ldap" or "Fake"))
             errors.Add($"ActiveDirectory:Provider must be 'Ldap' or 'Fake' (was '{ad.Provider}').");
 

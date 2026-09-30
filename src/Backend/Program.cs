@@ -46,7 +46,6 @@ builder.Host.UseSerilog((ctx, services, cfg) =>
     cfg.MinimumLevel.Information()
         .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
         .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning)
-        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", Serilog.Events.LogEventLevel.Information) // shows "Now listening on: ..."
         .Enrich.FromLogContext()
         .Enrich.With<SensitiveDataEnricher>()
         .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {CorrelationId} {Message:lj}{NewLine}{Exception}")
