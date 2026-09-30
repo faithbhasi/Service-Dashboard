@@ -98,7 +98,7 @@ delete-child pair on both.
    the configured *protected OUs*, protected groups (the built-in list, `adminCount=1` and the configured list) and user
    accounts with `adminCount=1`.
 
-Set the allowlists to the OUs you delegated above and no more.
+Set the allowlists to the OUs you delegated above and no more. You can then narrow what each role may manage (for example Helpdesk: only the Staff OU) in Users and Groups > Roles, but never beyond these allowlists.
 
 ## 6. Directory servers and TLS
 

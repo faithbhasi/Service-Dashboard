@@ -24,6 +24,8 @@ public class Role
     public string? Description { get; set; }
     public bool IsSystem { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
+    /// <summary>What this role may manage in Active Directory (see <see cref="AdScope"/>); null = no extra limit.</summary>
+    public string? AdScopeJson { get; set; }
     public List<RolePermission> Permissions { get; set; } = [];
 }
 

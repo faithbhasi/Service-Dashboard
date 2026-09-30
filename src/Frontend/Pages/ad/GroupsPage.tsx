@@ -9,12 +9,11 @@ import type { GroupPage } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { GroupDrawer } from './GroupDrawer';
 
-const PAGE_SIZE = 25;
 
 export function GroupsPage() {
   const list = useListParams();
   const drawer = useDrawerRoute('/ad/groups', 'members');
-  const groups = useAsync(() => get<GroupPage>('/modules/ad/groups' + qs({ q: list.q, page: list.page, pageSize: PAGE_SIZE })), [list.q, list.page]);
+  const groups = useAsync(() => get<GroupPage>('/modules/ad/groups' + qs({ q: list.q, page: list.page, pageSize: list.pageSize })), [list.q, list.page, list.pageSize]);
 
   return (
     <PageGuard page="ad.groups" requires={[Permissions.AdGroupsRead]}>
@@ -32,7 +31,7 @@ export function GroupsPage() {
           { key: 'tags', header: 'Scope and type', render: (g) => <GroupTags g={g} /> },
           { key: 'ou', header: 'OU', render: (g) => <Ou dn={g.ou} /> },
         ]} />
-      {groups.data && <Pagination page={list.page} pageSize={PAGE_SIZE} total={groups.data.total} capped={groups.data.totalIsCapped} onPage={list.setPage} />}
+      {groups.data && <Pagination page={list.page} pageSize={list.pageSize} onPageSize={list.setPageSize} total={groups.data.total} capped={groups.data.totalIsCapped} onPage={list.setPage} />}
       {drawer.id && <GroupDrawer id={drawer.id} onClose={drawer.close} />}
     </PageGuard>
   );

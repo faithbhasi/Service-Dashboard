@@ -5,7 +5,7 @@
   --page-bg: #f3f5f9; --page-text: #111827; --card-bg: #fff; --text: #111827; --text-muted: #5b6474;
   --border: #d6dbe4; --hover: #eef1f6; --section-header: #1b2433;
   --success: #146c2e; --warning: #8a5a00; --error: #b3261e;
-  --radius: 8px; --topbar-h: 64px;
+  --radius: 8px; --topbar-h: 76px;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-size: 15px;
 }
@@ -38,10 +38,10 @@ a { color: var(--primary); }
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 10px; }
 .topbar-left { min-width: 0; }
 .topbar-center { flex: 1; display: flex; justify-content: center; min-width: 0; }
-.logo { height: 44px; max-width: 220px; object-fit: contain; }
-.logo-fallback { width: 44px; height: 44px; border-radius: 8px; background: var(--primary); color: var(--primary-text);
+.logo { height: 54px; max-width: 260px; object-fit: contain; }
+.logo-fallback { width: 54px; height: 54px; border-radius: 8px; background: var(--primary); color: var(--primary-text);
   display: grid; place-items: center; font-weight: 700; }
-.product-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-name { font-size: 1.2rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .env-badge { font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--warning); color: #fff; text-transform: uppercase; }
 .env-production { background: var(--error); }
 .env-test { background: var(--primary); color: var(--primary-text); }
@@ -107,6 +107,8 @@ input:disabled, select:disabled, textarea:disabled { opacity: .6; }
 textarea { width: 100%; resize: vertical; }
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
 .field > label { font-weight: 600; font-size: .9rem; }
+.req { color: var(--error); font-weight: 700; }
+.field-label-row { display: flex; align-items: center; gap: 6px; }
 .field-error { color: var(--error); font-size: .85rem; }
 .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .search-input { width: 100%; max-width: 560px; }
@@ -157,7 +159,7 @@ textarea { width: 100%; resize: vertical; }
 .drawer-root, .modal-root { position: fixed; inset: 0; z-index: 50; }
 .drawer-overlay, .modal-overlay { position: absolute; inset: 0; background: rgb(0 0 0 / .45); }
 .drawer { position: absolute; right: 0; top: 0; bottom: 0; width: min(760px, 100vw); background: var(--card-bg); color: var(--text); display: flex; flex-direction: column; box-shadow: -8px 0 32px rgb(0 0 0 / .25); }
-.drawer-wide { width: min(clamp(760px, 62vw, 940px), 100vw); }
+.drawer-wide { width: min(clamp(880px, 70vw, 1120px), 100vw); }
 .drawer-close { position: absolute; right: 8px; top: 8px; z-index: 2; color: var(--text); }
 .drawer-header { padding: 16px 52px 12px 20px; border-bottom: 1px solid var(--border); }
 .drawer-body { flex: 1; overflow-y: auto; padding: 16px 24px 32px; }
@@ -249,3 +251,9 @@ a.stat:hover { border-color: var(--primary); }
   .color-row .muted { grid-column: 1 / -1; }
 }
 .tree.list-check .check { border-bottom: 0; padding: 2px 0; }
+.scope-editor { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px 14px; margin: 14px 0 0; }
+.scope-editor legend { font-weight: 600; padding: 0 6px; }
+.scope-section { padding: 8px 0; border-top: 1px solid var(--border); }
+.scope-section:first-of-type { border-top: 0; }
+.scope-list { margin: 6px 0 0 26px; max-height: 200px; }
+.scope-section .check strong { white-space: nowrap; }

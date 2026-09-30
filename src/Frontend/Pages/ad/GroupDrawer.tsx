@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GroupTags, ObjectLink, Ou, Text } from '../../Components/adUi';
 import { ChangeDialog } from '../../Components/ChangeDialog';
-import { Card, DataTable, Drawer, ErrorNote, KeyValue, Note, Pagination, Spinner, Tag } from '../../Components/ui';
+import { Card, CopyButton, DataTable, Drawer, ErrorNote, KeyValue, Note, Pagination, Spinner, Tag } from '../../Components/ui';
 import { useAuth } from '../../Hooks/AuthContext';
 import { useAsync, useDebounced } from '../../Hooks/useAsync';
 import { downloadFile, get, qs } from '../../Services/api';
@@ -10,7 +10,6 @@ import { routeFor, type AdGroup, type GroupMember, type MemberPage } from '../..
 import { Permissions } from '../../Services/permissions';
 import { Actions } from './ActionPanels';
 
-const PAGE_SIZE = 25;
 
 export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   const { can } = useAuth();
@@ -21,6 +20,7 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
   const q = useDebounced(input);
   const [kind, setKind] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [exportError, setExportError] = useState<unknown>();
   const [picked, setPicked] = useState<Set<string>>(new Set()); // members ticked for removal
   const [removeMode, setRemoveMode] = useState<null | 'confirm' | 'validate'>(null);
@@ -28,8 +28,8 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
 
   // The server searches and pages; the browser never holds the whole member list.
   const members = useAsync(
-    () => get<MemberPage>(`/modules/ad/groups/${id}/members` + qs({ q, kind, page, pageSize: PAGE_SIZE })),
-    [id, q, kind, page, version]);
+    () => get<MemberPage>(`/modules/ad/groups/${id}/members` + qs({ q, kind, page, pageSize })),
+    [id, q, kind, page, pageSize, version]);
   const g = group.data;
   const changed = () => { setPicked(new Set()); setVersion((v) => v + 1); };
   // Membership changes go through the same pipeline as a user's Groups tab, so the same permissions and protections apply.
@@ -40,7 +40,7 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
     <Drawer open onClose={onClose} wide header={
       group.error ? <ErrorNote error={group.error} /> : !g ? <Spinner /> : (
         <div className="summary">
-          <div className="summary-title"><h1>{g.name}</h1><GroupTags g={g} /></div>
+          <div className="summary-title"><h1>{g.name}</h1><CopyButton value={g.name} label="Copy group name" iconOnly /><GroupTags g={g} /></div>
           <div className="summary-meta">{g.description && <span>{g.description}</span>}<span>{g.memberCount ?? 0} direct members</span></div>
         </div>
       )}>
@@ -89,7 +89,7 @@ export function GroupDrawer({ id, onClose }: { id: string; onClose: () => void }
                 { key: 'email', header: 'Email', render: (m) => m.email ?? '' },
                 { key: 'en', header: 'State', render: (m) => m.enabled == null ? '' : m.enabled ? <Tag kind="success">Enabled</Tag> : <Tag kind="error">Disabled</Tag> },
               ]} />
-            {members.data && <Pagination page={page} pageSize={PAGE_SIZE} total={members.data.total} onPage={setPage} />}
+            {members.data && <Pagination page={page} pageSize={pageSize} total={members.data.total} onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(1); }} />}
             {canRemove && (
               <Actions onValidate={() => setRemoveMode('validate')} disabled={picked.size === 0}>
                 <button className="btn btn-danger" disabled={picked.size === 0} onClick={() => setRemoveMode('confirm')}>

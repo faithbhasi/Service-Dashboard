@@ -45,7 +45,7 @@ export function UserDrawer({ id, tab, onTab, onClose, onChanged }: {
             <RefreshButton onRefresh={refresh} />
           </div>
           <div className="summary-line">
-            <HeaderField label="Username">{u.samAccountName}</HeaderField>
+            <HeaderField label="Username">{u.samAccountName} <CopyButton value={u.samAccountName} label="Copy username" iconOnly /></HeaderField>
             <HeaderField label="Email">
               {u.email ? <>{u.email} <CopyButton value={u.email} label="Copy email address" iconOnly /></> : <NotSet />}
             </HeaderField>

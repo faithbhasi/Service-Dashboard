@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ServiceDashboard.Models;
 using ServiceDashboard.Modules.ActiveDirectory.Providers;
 
 namespace ServiceDashboard.Modules.ActiveDirectory.Services;
@@ -66,4 +67,21 @@ public static partial class AdProtection
 
     public static IEnumerable<string> AllowlistFor(DirectoryObjectKind kind, AdSettings s) =>
         kind == DirectoryObjectKind.Computer ? s.ManageableComputerOus : s.ManageableUserOus;
+}
+
+/// <summary>
+/// The extra limit a role puts on what its holders may manage, on top of the global allowlists and protected objects
+/// (which always still apply). A null list in the scope means the role adds no limit.
+/// </summary>
+public static class AdScopeRules
+{
+    public static string? OuReason(AdScope scope, DirectoryObjectKind kind, string ouDn)
+    {
+        var allowed = kind == DirectoryObjectKind.Computer ? scope.ComputerOus : scope.UserOus;
+        if (allowed == null) return null;
+        return allowed.Any(a => DnText.IsUnderOrEqual(ouDn, a)) ? null : "Your role is not allowed to manage objects in this OU.";
+    }
+
+    public static string? GroupReason(AdScope scope, string groupDn) =>
+        scope.Groups == null || scope.Groups.Any(g => DnText.Equal(g, groupDn)) ? null : "Your role is not allowed to manage this group.";
 }

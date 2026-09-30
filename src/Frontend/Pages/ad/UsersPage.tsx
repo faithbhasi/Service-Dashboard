@@ -13,7 +13,6 @@ import { Permissions } from '../../Services/permissions';
 import { UserDrawer } from './UserDrawer';
 
 const FILTERS: [string, string][] = [['All', 'All users'], ['Enabled', 'Enabled'], ['Disabled', 'Disabled'], ['Locked', 'Locked'], ['AccountExpired', 'Expired accounts']];
-const PAGE_SIZE = 25;
 
 export function UsersPage() {
   const list = useListParams();
@@ -44,8 +43,8 @@ export function UsersPage() {
     ['displayName', 'username', 'email', 'department', 'enabled', 'locked', 'lastLogon', 'ou']);
 
   const users = useAsync(
-    () => get<UserPage>('/modules/ad/users' + qs({ q: list.q, filter: list.filter, department, title, page: list.page, pageSize: PAGE_SIZE })),
-    [list.q, list.filter, department, title, list.page]);
+    () => get<UserPage>('/modules/ad/users' + qs({ q: list.q, filter: list.filter, department, title, page: list.page, pageSize: list.pageSize })),
+    [list.q, list.filter, department, title, list.page, list.pageSize]);
 
   return (
     <PageGuard page="ad.users" requires={[Permissions.AdUsersRead]}>
@@ -69,7 +68,7 @@ export function UsersPage() {
         columns={columns.filter((c) => visible.includes(c.key))} onRowClick={(u) => drawer.open(u.id)}
         empty="No users match your search." />
       {users.data && (
-        <Pagination page={list.page} pageSize={PAGE_SIZE} total={users.data.total} capped={users.data.totalIsCapped} onPage={list.setPage} />
+        <Pagination page={list.page} pageSize={list.pageSize} onPageSize={list.setPageSize} total={users.data.total} capped={users.data.totalIsCapped} onPage={list.setPage} />
       )}
       {drawer.id && <UserDrawer id={drawer.id} tab={drawer.tab} onTab={drawer.setTab} onClose={drawer.close} onChanged={users.reload} />}
     </PageGuard>

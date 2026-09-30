@@ -70,6 +70,8 @@ public sealed class AdChangeService(
     IAuditService audit, IHttpContextAccessor http)
 {
     private const string Module = ActiveDirectoryModule.Id;
+    // What the signed-in person's roles may manage (set at the start of every change; the service lives for one request).
+    private AdScope _scope = AdScope.Unrestricted;
     private string Correlation => http.HttpContext?.TraceIdentifier ?? "";
 
     // ================================================================== the shared pipeline
@@ -77,6 +79,7 @@ public sealed class AdChangeService(
     public async Task<ChangeResult> RunAsync(ChangeSpec spec, CancellationToken ct)
     {
         var user = await currentUser.GetAsync() ?? throw new ApiException(401, "Not signed in", "Sign in to continue.", "unauthenticated");
+        _scope = user.AdScope;
         var input = spec.Input;
         var label = spec.Kind.ToString().ToLowerInvariant();
         var targetText = spec.TargetId.ToString();
@@ -123,10 +126,13 @@ public sealed class AdChangeService(
         if (!dry.Success)
             return await Finish(spec, targetText, ChangeResult.Failed, dry.ErrorCode, "Validation failed: " + dry.Message, changes, dry.Checks, true, AuditResult.Failure, input, dry.Message);
 
-        // Every dry run is recorded, whether it was requested ("Validate only", the confirmation preview) or automatic.
-        await Record(spec, targetText, AuditResult.Validated, null, changes, input);
+        // A requested dry run (the confirmation preview or the Validate button) is recorded once. The automatic check that runs
+        // inside a real change is not recorded separately: the change's own result row already says what happened.
         if (input.ValidateOnly)
+        {
+            await Record(spec, targetText, AuditResult.Validated, null, changes, input);
             return Result(spec, targetText, ChangeResult.Validated, null, "Validated. No change was made.", changes, dry.Checks, true);
+        }
 
         // 6. The change itself.
         DirectoryResult done;
@@ -211,7 +217,7 @@ public sealed class AdChangeService(
     private string? OuCheck(ChangeTarget t)
     {
         var allow = AdProtection.AllowlistFor(t.Kind, t.Settings);
-        return AdProtection.OuUseReason(t.Ou, allow, t.Settings, provider.BaseDn);
+        return AdProtection.OuUseReason(t.Ou, allow, t.Settings, provider.BaseDn) ?? AdScopeRules.OuReason(_scope, t.Kind, t.Ou);
     }
 
     private Task<string?> UserOuCheck(ChangeTarget t) => Task.FromResult(ProtectedAccount(t) ?? OuCheck(t));
@@ -312,6 +318,8 @@ public sealed class AdChangeService(
                 // Both the current OU and the target OU must be allowed and not blocked.
                 if (AdProtection.OuUseReason(t.Ou, allow, t.Settings, provider.BaseDn) is { } cur) return "Current location: " + cur;
                 if (AdProtection.OuUseReason(target, allow, t.Settings, provider.BaseDn) is { } tgt) return "Target: " + tgt;
+                if (AdScopeRules.OuReason(_scope, kind, t.Ou) is { } curScope) return "Current location: " + curScope;
+                if (AdScopeRules.OuReason(_scope, kind, target) is { } tgtScope) return "Target: " + tgtScope;
                 if (await provider.GetOuAsync(target, ct) == null) return "The target OU does not exist.";
                 return null;
             },
@@ -347,6 +355,7 @@ public sealed class AdChangeService(
                     var fresh = await provider.GetGroupAsync(gid, ct);
                     if (fresh == null) return "The group no longer exists.";
                     if (AdProtection.GroupBlockReason(fresh, t.Settings) is { } g) return g;
+                    if (AdScopeRules.GroupReason(_scope, fresh.Dn) is { } gs) return gs;
                     if (!add)
                     {
                         var m = await provider.GetMembershipsAsync(userId, DirectoryObjectKind.User, ct);
@@ -399,6 +408,7 @@ public sealed class AdChangeService(
         var s = await adSettings.GetAsync();
         var memberships = await provider.GetMembershipsAsync(userId, DirectoryObjectKind.User, ct)
             ?? throw new ApiException(404, "Not found", "User not found in the directory.", "not_found");
+        var scope = (await currentUser.GetAsync())?.AdScope ?? AdScope.Unrestricted;
         var direct = memberships.Direct.Select(g => g.Id).ToHashSet();
         var primary = memberships.Primary?.Id;
 
@@ -406,7 +416,7 @@ public sealed class AdChangeService(
         var text = q?.Trim();
         return groups.Where(g => g != null).Select(g => g!)
             .Where(g => string.IsNullOrEmpty(text) || g.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || (g.Description?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false))
-            .Where(g => !AdProtection.IsGroupProtected(g, s))
+            .Where(g => !AdProtection.IsGroupProtected(g, s) && AdScopeRules.GroupReason(scope, g.Dn) == null)
             .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => (object)new { g.Id, g.Name, g.Description, g.Scope, g.Type, alreadyMember = direct.Contains(g.Id) || primary == g.Id })
             .ToList();

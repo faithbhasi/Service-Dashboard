@@ -1,14 +1,17 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using ServiceDashboard.Data;
+using ServiceDashboard.Models;
 
 namespace ServiceDashboard.Services;
 
 public sealed record CurrentUserInfo(
     Guid Id, string Subject, string DisplayName, string Email, bool IsEnabled,
     string ThemePreference, bool NavCollapsed,
-    IReadOnlyList<RoleRef> Roles, IReadOnlySet<string> Permissions)
+    IReadOnlyList<RoleRef> Roles, IReadOnlySet<string> Permissions, AdScope? Scope = null)
 {
+    /// <summary>What this person's roles may manage in Active Directory, inside the global allowlists.</summary>
+    public AdScope AdScope => Scope ?? AdScope.Unrestricted;
     public bool HasAccess => Roles.Count > 0;
     public bool Has(string permission) => IsEnabled && Permissions.Contains(permission);
     public bool HasAny(params string[] permissions) => IsEnabled && permissions.Any(Permissions.Contains);
@@ -49,6 +52,6 @@ public sealed class CurrentUser(IHttpContextAccessor accessor, AppDbContext db, 
         if (user == null) return null;
         var resolved = await access.ResolveAsync(user);
         return new CurrentUserInfo(user.Id, user.Subject, user.DisplayName, user.Email, user.IsEnabled,
-            user.ThemePreference, user.NavCollapsed, resolved.Roles, resolved.Permissions);
+            user.ThemePreference, user.NavCollapsed, resolved.Roles, resolved.Permissions, resolved.AdScope);
     }
 }

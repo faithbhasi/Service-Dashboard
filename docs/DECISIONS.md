@@ -76,6 +76,17 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
   assignment whether or not the Okta group currently has members.
 * A role cannot be deleted while assigned or mapped. Default roles cannot be deleted; only Admins is locked against editing.
 * Access-management denials are audited too.
+* **What a role may manage in Active Directory** (Users and Groups > Roles > edit a role > "What this role can manage in Active Directory"):
+  a role can be limited to some of the manageable **user OUs**, **computer OUs** and **groups** by ticking boxes. The lists to choose from are the
+  manageable OUs and groups in Settings > AD Integration, which stay the ceiling (protected objects and the allowlists always apply too), so a role
+  can only narrow what is allowed there. "No limit" (the default, and how every existing role behaves) adds nothing; an empty list means nothing.
+  * Enforcement is on the server in the same change pipeline as everything else (a role-scope denial is audited as Denied with the reason), and
+    the screens follow it: the Move/Add controls, `ouManageable` and a group's `isManageable` already reflect the signed-in person's roles.
+  * A person with several roles can manage what **any** of the roles that can change that kind of object allows. A read-only role (for example
+    Auditors) does not widen a helpdesk role, and the Admins role is never limited.
+  * Nobody can widen a scope beyond their own reach: to give a role a user OU, computer OU or group you must be able to manage it yourself, and
+    a person who cannot change that kind of object at all can keep or narrow a role's scope but not widen it. A role broader than yours cannot be
+    assigned to someone else or mapped to an Okta group. Cloning keeps the scope. Changes are audited with the new scope in the row.
 
 ## 6. How AD changes work (specification 12)
 
@@ -93,11 +104,14 @@ Nothing in Version 1 needs a cmdlet-only feature, so no RSAT module is required 
 * **Hourly chart on Home**: password resets and unlocks are counted from this application's audit log; lockouts come from the `lockoutTime`
   Active Directory keeps on each account (read through LDAP, capped at 5000). AD does not keep a history of lockouts, so an account that
   was locked and already unlocked may not be counted, and the chart can never show lockouts from before the account's last lockout.
+* **Lists** (Users, Computers, Groups, group members, App Users, Activity and Logs) have a Rows per page choice of 25, 50 or 100 at the bottom
+  right; on the AD lists it is kept in the address (`pageSize`).
 * **User and computer filters**: department and job title are "contains" filters on the `department` and `title` attributes; the operating
   system filter offers fixed families (Windows 11, Windows 10, Windows Server, macOS, Linux) matched on `operatingSystem`. All values are
   escaped like the search text. There are no drop-down lists of existing departments or titles because AD cannot list distinct values cheaply.
-* **Dry runs are always recorded** as "Validated (no change made)": the confirmation preview, an explicit "Validate", and the
-  automatic dry run inside a real change. A single change therefore leaves up to three audit rows (preview, automatic validation, result).
+* **Dry runs that were asked for are recorded once** as "Validated (no change made)": the confirmation screen's review step and the Validate
+  button. The automatic dry run inside a real change is **not** written as a second row (it used to be, which produced two "Validated" rows
+  before every change). A change made from the screen therefore leaves two audit rows: the review (Validated) and the result.
 * "Validate" (a dry run that changes nothing) needs the action's own permission. In the UI the button is shown to people with `settings.manage` (the spec says
   "admins"); the confirmation dialog uses the same dry run to show its preview to everyone who may make the change.
 * HTTP mapping of the result body (a `ChangeResult` in every case): success, no-change and validated = 200; denied = 403; failed
