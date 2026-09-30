@@ -1,0 +1,98 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Serilog.Core;
+using Serilog.Events;
+
+namespace ServiceDashboard.Tests;
+
+/// <summary>Collects every log event so tests can prove secrets never reach the logs.</summary>
+public sealed class CapturingSink : ILogEventSink
+{
+    private readonly List<LogEvent> _events = [];
+    public void Emit(LogEvent logEvent) { lock (_events) _events.Add(logEvent); }
+    public string AllText() { lock (_events) return string.Join("\n", _events.Select(e => e.RenderMessage() + " " + string.Join(" ", e.Properties.Select(p => p.Key + "=" + p.Value)) + " " + e.Exception)); }
+}
+
+/// <summary>The real application on an in-memory server, with its own temporary SQLite database and the Fake AD provider.</summary>
+public sealed class TestApp : WebApplicationFactory<Program>
+{
+    public string Root { get; } = Path.Combine(Path.GetTempPath(), "sd-tests-" + Guid.NewGuid().ToString("N"));
+    public CapturingSink Logs { get; } = new();
+    /// <summary>Extra configuration; set before the first request (the host starts lazily).</summary>
+    public Dictionary<string, string?> Extra { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Development");
+        builder.UseSetting("App:DataDirectory", Path.Combine(Root, "data"));
+        builder.UseSetting("App:AssetDirectory", Path.Combine(Root, "assets"));
+        builder.UseSetting("App:BackupDirectory", Path.Combine(Root, "backups"));
+        builder.UseSetting("Serilog:LogDirectory", Path.Combine(Root, "logs"));
+        builder.UseSetting("Okta:DevelopmentSignIn", "true");
+        builder.UseSetting("ActiveDirectory:Provider", "Fake");
+        builder.UseSetting("App:SearchRateLimitPerMinute", "100000");
+        builder.UseSetting("App:WriteRateLimitPerMinute", "100000");
+        foreach (var (k, v) in Extra) builder.UseSetting(k, v);
+        builder.ConfigureServices(s => s.AddSingleton<ILogEventSink>(Logs));
+    }
+
+    public TestClient NewClient() => new(this);
+
+    public T Service<T>(Func<T, Task> _ = null!) where T : notnull => Services.GetRequiredService<T>();
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        try { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); Directory.Delete(Root, true); } catch { /* best effort */ }
+    }
+}
+
+/// <summary>An HTTP client with a cookie jar that knows how to sign in as a seeded development user and send anti-forgery tokens.</summary>
+public sealed class TestClient
+{
+    public HttpClient Http { get; }
+    private string _csrf = "";
+
+    public TestClient(TestApp app) =>
+        Http = app.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true, AllowAutoRedirect = false });
+
+    public async Task<TestClient> SignInAsync(string devUser)
+    {
+        var cfg = await Http.GetFromJsonAsync<JsonElement>("/api/auth/config");
+        _csrf = cfg.GetProperty("csrfToken").GetString()!;
+        var users = await Http.GetFromJsonAsync<JsonElement>("/api/auth/dev-users");
+        var id = users.EnumerateArray().First(u => u.GetProperty("email").GetString() == devUser + "@example.invalid").GetProperty("id").GetGuid();
+        var res = await Send(HttpMethod.Post, "/api/auth/dev-login", new { userId = id });
+        if (res.StatusCode == HttpStatusCode.OK) await RefreshCsrfAsync();
+        LastSignIn = res;
+        return this;
+    }
+
+    public HttpResponseMessage? LastSignIn { get; private set; }
+
+    public async Task RefreshCsrfAsync()
+    {
+        var me = await Http.GetAsync("/api/auth/me");
+        if (me.IsSuccessStatusCode) _csrf = (await me.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("csrfToken").GetString()!;
+    }
+
+    public Task<HttpResponseMessage> Get(string url) => Http.GetAsync(url);
+
+    public Task<HttpResponseMessage> Send(HttpMethod method, string url, object? body = null)
+    {
+        var req = new HttpRequestMessage(method, url);
+        if (body != null) req.Content = JsonContent.Create(body);
+        if (method != HttpMethod.Get) req.Headers.Add("X-XSRF-TOKEN", _csrf);
+        return Http.SendAsync(req);
+    }
+
+    public Task<HttpResponseMessage> Post(string url, object? body = null) => Send(HttpMethod.Post, url, body ?? new { });
+    public Task<HttpResponseMessage> Put(string url, object? body = null) => Send(HttpMethod.Put, url, body ?? new { });
+    public Task<HttpResponseMessage> Delete(string url) => Send(HttpMethod.Delete, url);
+
+    public async Task<JsonElement> Json(HttpResponseMessage res) => await res.Content.ReadFromJsonAsync<JsonElement>();
+}
