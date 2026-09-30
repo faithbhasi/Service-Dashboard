@@ -7,7 +7,7 @@ import { useShell } from '../../Hooks/ShellContext';
 import { useAsync, useDebounced } from '../../Hooks/useAsync';
 import { get, qs } from '../../Services/api';
 import { generatePassword } from '../../Services/password';
-import type { AdComputer, AdUser } from '../../Services/adTypes';
+import type { AdComputer, AdUser, Memberships } from '../../Services/adTypes';
 import { Permissions } from '../../Services/permissions';
 import { OuPicker } from './OuPicker';
 
@@ -192,11 +192,19 @@ export function AddToGroupsPanel({ user, onChanged }: { user: AdUser; onChanged:
   const q = useDebounced(input.trim(), 300);
   const [version, setVersion] = useState(0);
   const groups = useAsync(() => get<Addable[]>(`/modules/ad/users/${user.id}/addable-groups` + qs({ q })), [user.id, q, version]);
+  const current = useAsync(() => get<Memberships>(`/modules/ad/users/${user.id}/groups`), [user.id, version]);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<Mode>(null);
 
   return (
     <Card title="Add to groups">
+      <h3 style={{ marginTop: 0 }}>Current direct groups</h3>
+      <p>
+        {current.data?.direct.length
+          ? current.data.direct.map((g) => <span key={g.id} style={{ marginRight: 6 }}><Tag kind={g.isProtected ? 'warning' : 'neutral'}>{g.name}</Tag></span>)
+          : <span className="muted">{current.loading ? 'Loading...' : 'None (other than the primary group).'}</span>}
+      </p>
+      <h3>Add to</h3>
       <p className="muted small">Only groups on the manageable groups allowlist can be added. Protected groups can never be changed here.</p>
       <input type="search" placeholder="Search manageable groups" value={input} onChange={(e) => setInput(e.target.value)} aria-label="Search groups" style={{ width: '100%', marginBottom: 8 }} />
       <ErrorNote error={groups.error} />
